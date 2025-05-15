@@ -1,96 +1,56 @@
-// services/aiService.js - แก้ไขชื่อโมเดล
-const { Anthropic } = require('@anthropic-ai/sdk');
+// services/aiService.js
+const OpenAI = require('openai');
 require('dotenv').config();
 
 class AiService {
   constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.AI_API_KEY,
+    this.openai = new OpenAI({
+      apiKey: process.env.AI_API_KEY
     });
   }
 
   async processImage(imageBuffer, command) {
     try {
-      console.log('Processing image with Claude SDK...');
+      console.log('Processing image with OpenAI (ChatGPT) API...');
       console.log('Image size:', (imageBuffer.length / 1024 / 1024).toFixed(2), 'MB');
       
       // แปลงรูปภาพเป็น base64
       const base64Image = imageBuffer.toString('base64');
       
-      console.log('Sending request to Claude API via SDK...');
+      console.log('Sending request to OpenAI API...');
       
-      // ใช้ชื่อโมเดลที่ถูกต้อง (ล่าสุด)
-      const modelName = 'claude-3-7-sonnet-20250219'; // แนะนำให้ลองใช้โมเดลนี้ก่อน
-      
-      console.log(`Using Claude model: ${modelName}`);
-      
-      const message = await this.anthropic.messages.create({
-        model: modelName,
-        max_tokens: 1000,
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4-vision-preview", // โมเดลที่รองรับการวิเคราะห์รูปภาพ
         messages: [
           {
-            role: 'user',
+            role: "user",
             content: [
-              { type: 'text', text: command },
-              { 
-                type: 'image', 
-                source: {
-                  type: 'base64',
-                  media_type: 'image/jpeg',
-                  data: base64Image
+              { type: "text", text: command },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Image}`,
+                  detail: "high" // คุณสามารถใช้ "low", "high", หรือ "auto"
                 }
               }
             ]
           }
-        ]
+        ],
+        max_tokens: 1000
       });
       
-      console.log('Received response from Claude API');
-      return message.content[0].text;
-    } catch (error) {
-      console.error('Claude API error:', error);
+      console.log('Received response from OpenAI API');
       
-      // ตรวจสอบข้อผิดพลาดเกี่ยวกับโมเดล
-      if (error.status === 404 && error.error?.error?.message?.includes('model:')) {
-        console.error('Model not found error. Available models may have changed.');
-        
-        // ลองใช้โมเดลอื่นโดยอัตโนมัติ (fallback)
-        try {
-          console.log('Attempting with alternate model: claude-3-haiku-20240307');
-          
-          const fallbackModel = 'claude-3-haiku-20240307';
-          const base64Image = imageBuffer.toString('base64');
-          
-          const message = await this.anthropic.messages.create({
-            model: fallbackModel,
-            max_tokens: 1000,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: command },
-                  { 
-                    type: 'image', 
-                    source: {
-                      type: 'base64',
-                      media_type: 'image/jpeg',
-                      data: base64Image
-                    }
-                  }
-                ]
-              }
-            ]
-          });
-          
-          console.log('Fallback model successful');
-          return message.content[0].text;
-        } catch (fallbackError) {
-          console.error('Fallback model also failed:', fallbackError);
-          throw new Error('ไม่สามารถใช้โมเดล Claude ที่มีอยู่ได้ กรุณาตรวจสอบโมเดลที่สามารถใช้งานได้');
-        }
+      // ดึงข้อความตอบกลับ
+      if (response.choices && response.choices.length > 0) {
+        return response.choices[0].message.content;
+      } else {
+        throw new Error('ไม่พบเนื้อหาในการตอบกลับจาก API');
       }
+    } catch (error) {
+      console.error('OpenAI API error:', error);
       
-      // จัดการข้อผิดพลาดอื่นๆ
+      // จัดการข้อผิดพลาดที่อาจเกิดขึ้น
       if (error.status === 401) {
         throw new Error('รหัส API ไม่ถูกต้องหรือหมดอายุ กรุณาตรวจสอบการตั้งค่า API key');
       } else if (error.status === 400) {
