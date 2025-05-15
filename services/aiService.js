@@ -20,7 +20,7 @@ class AiService {
       console.log('Sending request to Claude API via SDK...');
       
       // ใช้ชื่อโมเดลที่ถูกต้อง (ล่าสุด)
-      const modelName = 'claude-3-opus-20240229'; // แนะนำให้ลองใช้โมเดลนี้ก่อน
+      const modelName = 'claude-3-7-sonnet-20250219'; // แนะนำให้ลองใช้โมเดลนี้ก่อน
       
       console.log(`Using Claude model: ${modelName}`);
       
