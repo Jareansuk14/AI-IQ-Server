@@ -5,7 +5,7 @@ require('dotenv').config();
 class AiService {
   constructor() {
     this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey: process.env.AI_API_KEY
     });
   }
 
