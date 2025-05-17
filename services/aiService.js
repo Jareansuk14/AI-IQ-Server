@@ -21,7 +21,7 @@ class AiService {
       
       // เปลี่ยนโมเดลเป็น gpt-4o ซึ่งเป็นโมเดลปัจจุบันที่รองรับการวิเคราะห์รูปภาพ
       const response = await this.openai.chat.completions.create({
-        model: "gpt-4o", // เปลี่ยนจาก gpt-4-vision-preview เป็น gpt-4o
+        model: "gpt-4-turbo", // เปลี่ยนจาก gpt-4-vision-preview เป็น gpt-4o
         messages: [
           {
             role: "user",
@@ -61,7 +61,7 @@ class AiService {
           
           // ใช้โมเดลทางเลือก
           const fallbackResponse = await this.openai.chat.completions.create({
-            model: "gpt-4", // ลองใช้ gpt-4 ทั่วไป (อาจไม่รองรับรูปภาพเต็มรูปแบบ)
+            model: "gpt-4-turbo", // ลองใช้ gpt-4 ทั่วไป (อาจไม่รองรับรูปภาพเต็มรูปแบบ)
             messages: [
               {
                 role: "user",
