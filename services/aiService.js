@@ -31,13 +31,13 @@ class AiService {
                 type: "image_url",
                 image_url: {
                   url: `data:image/jpeg;base64,${base64Image}`,
-                  detail: "high" // สามารถใช้ "low" ถ้าต้องการลดการใช้โควต้า
+                  detail: "low" // สามารถใช้ "low" ถ้าต้องการลดการใช้โควต้า
                 }
               }
             ]
           }
         ],
-        max_tokens: 1000
+        max_tokens: 200
       });
       
       console.log('Received response from OpenAI API');
@@ -71,13 +71,13 @@ class AiService {
                     type: "image_url",
                     image_url: {
                       url: `data:image/jpeg;base64,${base64Image}`,
-                      detail: "auto"
+                      detail: "low"
                     }
                   }
                 ]
               }
             ],
-            max_tokens: 1000
+            max_tokens: 200
           });
           
           console.log('Fallback model successful');
