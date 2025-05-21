@@ -1,3 +1,4 @@
+//server.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -91,6 +92,12 @@ const PORT = process.env.PORT || 3000;
 connectDB()
   .then(() => {
     console.log('Database connection attempt completed');
+    
+    // เพิ่มคำสั่งนี้เพื่อสร้าง Rich Menu (ใช้เฉพาะครั้งแรกหรือเมื่อต้องการอัปเดต Rich Menu)
+    // ถ้าต้องการให้ทำงานเฉพาะเมื่อเริ่ม server ในครั้งแรก ให้ใส่เงื่อนไขตรวจสอบ
+    if (process.env.CREATE_RICH_MENU === 'true') {
+      require('./utils/createRichMenu');
+    }
   })
   .catch(err => {
     console.error('Database connection attempt failed:', err);
