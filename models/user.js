@@ -1,4 +1,3 @@
-// models/user.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 
@@ -26,7 +25,7 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  // เพิ่มฟิลด์สำหรับระบบเครดิต
+  // ฟิลด์สำหรับระบบเครดิต
   credits: {
     type: Number,
     default: 10 // ผู้ใช้ใหม่จะได้รับฟรี 10 เครดิต

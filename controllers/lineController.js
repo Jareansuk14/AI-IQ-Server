@@ -1,10 +1,10 @@
-// controllers/lineController.js
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
-const creditService = require('../services/creditService'); // เพิ่มบรรทัดนี้
+const creditService = require('../services/creditService');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
 const Command = require('../models/command');
+const CreditTransaction = require('../models/creditTransaction');
 
 // แปลง stream เป็น buffer
 const streamToBuffer = (stream) => {
@@ -33,24 +33,31 @@ const getRandomCommand = async () => {
 const saveOrUpdateUser = async (lineUserId, profile) => {
   try {
     let user = await User.findOne({ lineUserId });
+    let isNewUser = false;
     
     if (!user) {
+      isNewUser = true;
       user = new User({
         lineUserId,
         displayName: profile?.displayName,
         pictureUrl: profile?.pictureUrl
       });
       
-      // เพิ่มธุรกรรมเครดิตเริ่มต้น
+      // บันทึกผู้ใช้ใหม่
       await user.save();
       
       // สร้างธุรกรรมสำหรับเครดิตเริ่มต้น
-      const CreditTransaction = require('../models/creditTransaction');
       await CreditTransaction.create({
         user: user._id,
         amount: 10,
         type: 'initial',
         description: 'เครดิตเริ่มต้นสำหรับผู้ใช้ใหม่'
+      });
+      
+      // ส่งข้อความแจ้งเตือนเครดิตเริ่มต้น
+      await lineService.pushMessage(lineUserId, {
+        type: 'text',
+        text: `🎊 ยินดีต้อนรับสู่บริการวิเคราะห์รูปภาพ AI!\n\nคุณได้รับ 10 เครดิตเริ่มต้นฟรี\n\nใช้รหัสแนะนำเพื่อรับเพิ่มอีก 5 เครดิต หรือแนะนำเพื่อนเพื่อรับ 10 เครดิตต่อการแนะนำ 1 คน\n\nส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!`
       });
     } else {
       user.lastInteraction = new Date();
@@ -65,7 +72,7 @@ const saveOrUpdateUser = async (lineUserId, profile) => {
       await user.save();
     }
     
-    return user;
+    return { user, isNewUser };
   } catch (error) {
     console.error('Error saving/updating user:', error);
     throw error;
@@ -113,7 +120,7 @@ const handleSpecialCommand = async (event) => {
       
       return lineService.replyMessage(event.replyToken, {
         type: 'text',
-        text: `รหัสแนะนำของคุณคือ: ${referralCode}\n\nแชร์ให้เพื่อนเพื่อรับ 10 เครดิต!\n\nแชร์ลิงก์นี้:\n${lineUrl}\n\nเมื่อเพื่อนใช้รหัสของคุณ คุณจะได้รับ 10 เครดิต และเพื่อนจะได้รับเพิ่มอีก 5 เครดิต (รวมเป็น 15 เครดิต)`
+        text: `รหัสแนะนำของคุณคือ: ${referralCode}\n\nแชร์ให้เพื่อนเพื่อรับ 10 เครดิต!\n\nเพื่อนของคุณสามารถพิมพ์:\nรหัส:${referralCode}\nเพื่อรับเพิ่ม 5 เครดิต\n\nหรือแชร์ลิงก์นี้:\n${lineUrl}`
       });
     }
     
@@ -133,12 +140,12 @@ const handleSpecialCommand = async (event) => {
         
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `ใช้รหัสแนะนำสำเร็จ! ได้รับเพิ่ม 5 เครดิต\nเครดิตคงเหลือ: ${result.credits} เครดิต`
+          text: `✅ ใช้รหัสแนะนำสำเร็จ!\nคุณได้รับเพิ่ม 5 เครดิต\nเครดิตคงเหลือ: ${result.credits} เครดิต`
         });
       } catch (error) {
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `ไม่สามารถใช้รหัสแนะนำได้: ${error.message}`
+          text: `❌ ไม่สามารถใช้รหัสแนะนำได้: ${error.message}`
         });
       }
     }
@@ -176,13 +183,13 @@ const handleEvent = async (event) => {
     const profile = await lineService.getUserProfile(event.source.userId);
     
     // บันทึกหรืออัปเดตข้อมูลผู้ใช้
-    const user = await saveOrUpdateUser(event.source.userId, profile);
+    const { user } = await saveOrUpdateUser(event.source.userId, profile);
     
     // ตรวจสอบเครดิต
     if (user.credits <= 0) {
       return lineService.replyMessage(event.replyToken, {
         type: 'text',
-        text: 'เครดิตของคุณหมดแล้ว กรุณาแนะนำเพื่อนหรือเติมเครดิตเพื่อใช้งานต่อ\n\nแนะนำเพื่อนโดยกดที่ปุ่ม "แชร์เพื่อรับเครดิต" ด้านล่าง'
+        text: '⚠️ เครดิตของคุณหมดแล้ว กรุณาแนะนำเพื่อนหรือเติมเครดิตเพื่อใช้งานต่อ\n\nแนะนำเพื่อนโดยกดที่ปุ่ม "แชร์เพื่อรับเครดิต" ด้านล่าง'
       });
     }
     

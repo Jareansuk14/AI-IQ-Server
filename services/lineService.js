@@ -1,4 +1,3 @@
-// services/lineService.js
 const line = require('@line/bot-sdk');
 require('dotenv').config();
 
@@ -30,6 +29,16 @@ class LineService {
   // ฟังก์ชันสำหรับตอบกลับข้อความ
   async replyMessage(replyToken, messages) {
     return this.client.replyMessage(replyToken, messages);
+  }
+  
+  // ฟังก์ชันสำหรับส่งข้อความแจ้งเตือน (push)
+  async pushMessage(userId, messages) {
+    try {
+      return this.client.pushMessage(userId, messages);
+    } catch (error) {
+      console.error('Error pushing message:', error);
+      return null;
+    }
   }
 }
 

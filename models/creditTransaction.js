@@ -1,4 +1,3 @@
-// models/creditTransaction.js
 const mongoose = require('mongoose');
 
 const CreditTransactionSchema = new mongoose.Schema({
