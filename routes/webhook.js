@@ -1,4 +1,3 @@
-// routes/webhook.js
 const express = require('express');
 const line = require('@line/bot-sdk');
 const router = express.Router();
@@ -42,6 +41,9 @@ router.post('/', express.json(), validateSignature, line.middleware(config), asy
     if (!events || events.length === 0) {
       return res.status(200).end();
     }
+    
+    // แสดงข้อมูลอีเวนต์ในคอนโซล (สำหรับการดีบัก)
+    console.log('Received events:', JSON.stringify(events));
     
     // ประมวลผลแต่ละอีเวนต์
     await Promise.all(events.map(event => {
