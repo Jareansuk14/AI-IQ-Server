@@ -124,7 +124,7 @@ const handleSpecialCommand = async (event) => {
     // คำสั่งดูรหัสแนะนำ
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
       const referralCode = await creditService.getReferralCode(event.source.userId);
-      const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20${referralCode}`;
+      const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
       
       return lineService.replyMessage(event.replyToken, {
         type: 'text',
