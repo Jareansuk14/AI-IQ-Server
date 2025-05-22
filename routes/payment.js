@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const PaymentTransaction = require('../models/paymentTransaction');
 const qrCodeService = require('../services/qrCodeService');
-const fetch = require('node-fetch'); // เพิ่มบรรทัดนี้
+const axios = require('axios'); // เปลี่ยนจาก node-fetch เป็น axios
 require('dotenv').config();
 
 // แสดงหน้า QR Code สำหรับการชำระเงิน
@@ -555,15 +555,14 @@ router.post('/manual-check/:paymentId', async (req, res) => {
     
     // ส่งคำขอไปยัง Gmail Integration server เพื่อตรวจสอบ email ใหม่
     try {
-      const gmailResponse = await fetch('https://gmail-mongodb-integration.onrender.com/check-emails', {
-        method: 'POST',
+      const gmailResponse = await axios.post('https://gmail-mongodb-integration.onrender.com/check-emails', {}, {
+        timeout: 10000, // 10 วินาที timeout
         headers: {
           'Content-Type': 'application/json',
-        },
-        timeout: 10000 // 10 วินาที timeout
+        }
       });
       
-      if (gmailResponse.ok) {
+      if (gmailResponse.status === 200) {
         console.log('✅ Successfully triggered Gmail check');
       } else {
         console.log('⚠️ Gmail check request failed, but continuing with local check');
