@@ -251,11 +251,14 @@ router.get('/qr/:paymentId', async (req, res) => {
           .qr-container {
             background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
             border-radius: 20px;
-            padding: 25px;
+            padding: 15px;
             margin: 25px 0;
             border: 2px solid #177ddc;
             box-shadow: 0 0 20px rgba(23, 125, 220, 0.2);
             position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
           }
           .qr-container::before {
             content: '';
@@ -274,11 +277,12 @@ router.get('/qr/:paymentId', async (req, res) => {
             50% { opacity: 1; }
           }
           .qr-code {
-            max-width: 100%;
+            width: 100%;
+            max-width: 280px;
             height: auto;
-            border-radius: 15px;
+            border-radius: 10px;
             background: white;
-            padding: 10px;
+            padding: 8px;
           }
           .amount {
             font-size: 36px;
@@ -433,6 +437,9 @@ router.get('/qr/:paymentId', async (req, res) => {
             .content {
               padding: 20px 15px;
             }
+            .qr-code {
+              max-width: 240px;
+            }
           }
           .pulse {
             animation: pulse 2s infinite;
@@ -475,10 +482,12 @@ router.get('/qr/:paymentId', async (req, res) => {
             <div class="instructions">
               <h3>📱 วิธีการชำระเงิน:</h3>
               <ol>
-                <li>กดปุ่ม <strong>"ตรวจสอบการชำระเงิน"</strong> ด้านล่าง</li>
                 <li>เปิดแอปธนาคารของคุณ</li>
-                <li>สแกน QR Code เพื่อชำระเงิน</li>
-                <li>ยืนยันการโอนเงิน <strong>${payment.totalAmount.toFixed(2)} บาท</strong></li>
+                <li>เลือก <strong>"สแกน QR"</strong> หรือ <strong>"พร้อมเพย์"</strong></li>
+                <li>สแกน QR Code ด้านบน</li>
+                <li>ตรวจสอบจำนวนเงิน <strong>${payment.totalAmount.toFixed(2)} บาท</strong></li>
+                <li>ยืนยันการโอนเงิน</li>
+                <li>กดปุ่ม <strong>"ตรวจสอบการชำระเงิน"</strong> ด้านล่าง</li>
               </ol>
             </div>
             
