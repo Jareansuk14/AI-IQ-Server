@@ -93,21 +93,37 @@ class PaymentService {
   // ตรวจสอบการชำระเงินจากข้อมูลอีเมล
   async checkPaymentFromEmail(emailData) {
     try {
+      console.log('\n🔍 === STARTING PAYMENT MATCHING ===');
+      console.log('📧 Email ID:', emailData.id);
+      console.log('📅 Email received at:', emailData.receivedAt);
+      
       // ตรวจสอบว่าเป็นเงินเข้าหรือไม่
       if (!emailData.transactionData || emailData.transactionData.transactionType !== 'เงินเข้า') {
+        console.log('❌ Not income transaction:', emailData.transactionData?.transactionType || 'No transaction data');
         return null;
       }
 
       const amount = emailData.transactionData.amount;
       const emailDate = emailData.transactionData.date;
       const emailTime = emailData.transactionData.time;
+      const reference = emailData.transactionData.reference;
+
+      console.log('💰 Transaction details from email:');
+      console.log(`   Amount: ${amount} บาท`);
+      console.log(`   Date: ${emailDate}`);
+      console.log(`   Time: ${emailTime}`);
+      console.log(`   Reference: ${reference}`);
+      console.log(`   Type: ${emailData.transactionData.transactionType}`);
 
       // แปลงวันที่และเวลาจากอีเมลเป็น Date object
       const transactionDateTime = this.parseEmailDateTime(emailDate, emailTime);
       if (!transactionDateTime) {
-        console.log('ไม่สามารถแปลงวันที่และเวลาได้:', emailDate, emailTime);
+        console.log('❌ Cannot parse date/time:', emailDate, emailTime);
         return null;
       }
+
+      console.log('📅 Parsed transaction datetime:', transactionDateTime.toISOString());
+      console.log('🌏 Local time:', transactionDateTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }));
 
       // หารายการรอชำระเงินที่ตรงกับจำนวนเงิน
       const pendingPayments = await PaymentTransaction.find({
@@ -115,15 +131,62 @@ class PaymentService {
         status: 'pending'
       }).populate('user');
 
-      for (const payment of pendingPayments) {
-        // ตรวจสอบว่าอยู่ในช่วงเวลา 10 นาทีหรือไม่
-        if (payment.isWithinTimeWindow(transactionDateTime) && !payment.isExpired()) {
+      console.log(`\n🔎 Found ${pendingPayments.length} pending payment(s) with amount ${amount} บาท`);
+
+      if (pendingPayments.length === 0) {
+        console.log('❌ No pending payments found with this amount');
+        
+        // แสดงรายการ pending ทั้งหมดเพื่อ debug
+        const allPending = await PaymentTransaction.find({ status: 'pending' });
+        console.log('\n📋 All pending payments:');
+        allPending.forEach((p, index) => {
+          console.log(`   ${index + 1}. Amount: ${p.totalAmount}, Created: ${p.createdAt.toISOString()}, User: ${p.lineUserId}`);
+        });
+        
+        return null;
+      }
+
+      for (const [index, payment] of pendingPayments.entries()) {
+        console.log(`\n🔍 Checking payment ${index + 1}/${pendingPayments.length}:`);
+        console.log(`   Payment ID: ${payment._id}`);
+        console.log(`   User: ${payment.lineUserId}`);
+        console.log(`   Amount: ${payment.totalAmount} บาท`);
+        console.log(`   Created: ${payment.createdAt.toISOString()}`);
+        console.log(`   Expires: ${payment.expiresAt.toISOString()}`);
+        console.log(`   Package: ${payment.packageType} (${payment.credits} credits)`);
+
+        // ตรวจสอบว่าหมดอายุหรือไม่
+        const isExpired = payment.isExpired();
+        console.log(`   🕐 Is Expired: ${isExpired ? '❌ YES' : '✅ NO'}`);
+        
+        if (isExpired) {
+          console.log('   ⏰ Payment expired, skipping...');
+          continue;
+        }
+
+        // ตรวจสอบช่วงเวลา
+        const timeDiff = Math.abs(transactionDateTime.getTime() - payment.createdAt.getTime());
+        const timeDiffMinutes = timeDiff / (1000 * 60);
+        const isWithinTimeWindow = payment.isWithinTimeWindow(transactionDateTime);
+        
+        console.log(`   📊 Time comparison:`);
+        console.log(`      Transaction time: ${transactionDateTime.toISOString()}`);
+        console.log(`      Payment created:  ${payment.createdAt.toISOString()}`);
+        console.log(`      Time difference:  ${timeDiffMinutes.toFixed(2)} minutes`);
+        console.log(`      Within 10min window: ${isWithinTimeWindow ? '✅ YES' : '❌ NO'}`);
+
+        if (isWithinTimeWindow) {
+          console.log('✅ PAYMENT MATCH FOUND!');
+          console.log('🔄 Updating payment status to completed...');
+          
           // อัปเดตสถานะเป็นสำเร็จ
           payment.status = 'completed';
           payment.paidAt = transactionDateTime;
           payment.emailMatchId = emailData.id;
           await payment.save();
 
+          console.log('💳 Adding credits to user...');
+          
           // เพิ่มเครดิตให้ผู้ใช้
           await creditService.updateCredit(
             payment.lineUserId, 
@@ -132,14 +195,28 @@ class PaymentService {
             `ซื้อเครดิต ${payment.credits} เครดิต (${payment.packageType})`
           );
 
-          console.log(`Payment completed for user ${payment.lineUserId}, amount: ${amount}, credits: ${payment.credits}`);
+          console.log('🎉 PAYMENT PROCESSING COMPLETED!');
+          console.log(`   User: ${payment.lineUserId}`);
+          console.log(`   Amount: ${amount} บาท`);
+          console.log(`   Credits: ${payment.credits}`);
+          console.log(`   Reference: ${reference}`);
+          console.log('=== END PAYMENT MATCHING ===\n');
+          
           return payment;
+        } else {
+          console.log('❌ Time window check failed');
+          if (timeDiffMinutes > 10) {
+            console.log(`   ⏰ Time difference (${timeDiffMinutes.toFixed(2)} min) exceeds 10 minutes`);
+          }
         }
       }
 
+      console.log('❌ No matching payment found');
+      console.log('=== END PAYMENT MATCHING ===\n');
       return null;
     } catch (error) {
-      console.error('Error checking payment from email:', error);
+      console.error('❌ Error checking payment from email:', error);
+      console.log('=== END PAYMENT MATCHING (ERROR) ===\n');
       throw error;
     }
   }
@@ -147,16 +224,29 @@ class PaymentService {
   // แปลงวันที่และเวลาจากอีเมลเป็น Date object
   parseEmailDateTime(dateStr, timeStr) {
     try {
+      console.log(`\n📅 Parsing date/time: "${dateStr}" "${timeStr}"`);
+      
       // ตัวอย่าง: dateStr = "22/05/68", timeStr = "09:22"
-      if (!dateStr || !timeStr) return null;
+      if (!dateStr || !timeStr) {
+        console.log('❌ Missing date or time string');
+        return null;
+      }
 
       // แยกวันที่
       const [day, month, year] = dateStr.split('/');
-      if (!day || !month || !year) return null;
+      if (!day || !month || !year) {
+        console.log('❌ Invalid date format, expected DD/MM/YY');
+        return null;
+      }
 
       // แยกเวลา
       const [hours, minutes] = timeStr.split(':');
-      if (!hours || !minutes) return null;
+      if (!hours || !minutes) {
+        console.log('❌ Invalid time format, expected HH:MM');
+        return null;
+      }
+
+      console.log(`   Raw parts: day=${day}, month=${month}, year=${year}, hours=${hours}, minutes=${minutes}`);
 
       // แปลงปี (68 -> 2568 -> 2025)
       let fullYear = parseInt(year);
@@ -166,6 +256,8 @@ class PaymentService {
           fullYear = fullYear - 543; // แปลงจาก พ.ศ. เป็น ค.ศ.
         }
       }
+
+      console.log(`   Converted year: ${year} -> ${fullYear}`);
 
       // สร้าง Date object
       const date = new Date(
@@ -177,9 +269,17 @@ class PaymentService {
         0
       );
 
-      return isNaN(date.getTime()) ? null : date;
+      if (isNaN(date.getTime())) {
+        console.log('❌ Invalid date created');
+        return null;
+      }
+
+      console.log(`✅ Parsed successfully: ${date.toISOString()}`);
+      console.log(`   Local time (Bangkok): ${date.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+      
+      return date;
     } catch (error) {
-      console.error('Error parsing email date time:', error);
+      console.error('❌ Error parsing email date time:', error);
       return null;
     }
   }

@@ -51,11 +51,12 @@ app.get('/api/status', (req, res) => {
 // เพิ่ม API สำหรับตรวจสอบการชำระเงินแบบ manual (สำหรับ testing)
 app.get('/api/payment/check', async (req, res) => {
   try {
+    console.log('🔧 Manual payment check requested');
     await paymentChecker.manualCheck();
-    res.json({ message: 'Payment check completed' });
+    res.json({ message: 'Payment check completed', timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Manual payment check error:', error);
-    res.status(500).json({ error: 'Payment check failed' });
+    res.status(500).json({ error: 'Payment check failed', details: error.message });
   }
 });
 
@@ -67,6 +68,73 @@ app.get('/api/payment/stats', async (req, res) => {
   } catch (error) {
     console.error('Payment stats error:', error);
     res.status(500).json({ error: 'Failed to get payment stats' });
+  }
+});
+
+// เพิ่ม API สำหรับดูรายการ pending payments
+app.get('/api/payment/pending', async (req, res) => {
+  try {
+    const PaymentTransaction = require('./models/paymentTransaction');
+    const pendingPayments = await PaymentTransaction.find({ status: 'pending' })
+      .populate('user', 'lineUserId displayName')
+      .sort({ createdAt: -1 });
+    
+    const formattedPayments = pendingPayments.map(p => ({
+      id: p._id,
+      lineUserId: p.lineUserId,
+      amount: p.totalAmount,
+      credits: p.credits,
+      packageType: p.packageType,
+      createdAt: p.createdAt,
+      expiresAt: p.expiresAt,
+      isExpired: p.isExpired(),
+      timeLeft: Math.max(0, Math.floor((p.expiresAt - new Date()) / 60000)) // minutes left
+    }));
+    
+    res.json({
+      count: pendingPayments.length,
+      payments: formattedPayments
+    });
+  } catch (error) {
+    console.error('Error getting pending payments:', error);
+    res.status(500).json({ error: 'Failed to get pending payments' });
+  }
+});
+
+// เพิ่ม API สำหรับดูอีเมลล่าสุด
+app.get('/api/emails/recent', async (req, res) => {
+  try {
+    const { MongoClient } = require('mongodb');
+    const client = new MongoClient(process.env.MONGODB_URI);
+    await client.connect();
+    const db = client.db();
+    
+    const recentEmails = await db.collection('emails')
+      .find({})
+      .sort({ receivedAt: -1 })
+      .limit(10)
+      .toArray();
+    
+    await client.close();
+    
+    const formattedEmails = recentEmails.map(email => ({
+      id: email.id,
+      subject: email.subject,
+      from: email.from,
+      receivedAt: email.receivedAt,
+      processedBody: email.processedBody,
+      transactionData: email.transactionData,
+      paymentProcessed: email.paymentProcessed || false,
+      paymentMatched: email.paymentMatched || false
+    }));
+    
+    res.json({
+      count: recentEmails.length,
+      emails: formattedEmails
+    });
+  } catch (error) {
+    console.error('Error getting recent emails:', error);
+    res.status(500).json({ error: 'Failed to get recent emails' });
   }
 });
 

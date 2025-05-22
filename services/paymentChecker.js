@@ -32,7 +32,8 @@ class PaymentChecker {
     }
 
     this.isChecking = true;
-    console.log('PaymentChecker: Starting email check for payments...');
+    console.log('\n🔄 === PAYMENT CHECKER STARTED ===');
+    console.log('⏰ Time:', new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }));
     
     try {
       const db = await this.connectToEmailDB();
@@ -41,6 +42,9 @@ class PaymentChecker {
       // หาอีเมลที่ยังไม่ได้ประมวลผลสำหรับการชำระเงิน
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       
+      console.log('🔍 Searching for unprocessed emails...');
+      console.log(`   Looking for emails after: ${fiveMinutesAgo.toISOString()}`);
+      
       const unprocessedEmails = await emailCollection.find({
         receivedAt: { $gte: fiveMinutesAgo },
         paymentProcessed: { $ne: true }, // ยังไม่ได้ประมวลผลสำหรับการชำระเงิน
@@ -48,23 +52,46 @@ class PaymentChecker {
         'transactionData.amount': { $exists: true }
       }).sort({ receivedAt: -1 }).toArray();
 
-      console.log(`PaymentChecker: Found ${unprocessedEmails.length} unprocessed emails`);
+      console.log(`📧 Found ${unprocessedEmails.length} unprocessed emails`);
+
+      if (unprocessedEmails.length === 0) {
+        console.log('✅ No new emails to process');
+        console.log('=== PAYMENT CHECKER COMPLETED ===\n');
+        return;
+      }
 
       let processedCount = 0;
+      let matchedCount = 0;
       
-      for (const email of unprocessedEmails) {
+      for (const [index, email] of unprocessedEmails.entries()) {
         try {
+          console.log(`\n📧 Processing email ${index + 1}/${unprocessedEmails.length}:`);
+          console.log(`   Email ID: ${email.id}`);
+          console.log(`   Subject: ${email.subject}`);
+          console.log(`   From: ${email.from}`);
+          console.log(`   Received: ${email.receivedAt}`);
+          console.log(`   Processed Body: ${email.processedBody}`);
+          
+          if (email.transactionData) {
+            console.log(`   Transaction Data:`);
+            console.log(`      Type: ${email.transactionData.transactionType}`);
+            console.log(`      Amount: ${email.transactionData.amount}`);
+            console.log(`      Date/Time: ${email.transactionData.date} ${email.transactionData.time}`);
+            console.log(`      Reference: ${email.transactionData.reference}`);
+            console.log(`      Balance: ${email.transactionData.balance}`);
+          }
+          
           // ตรวจสอบและจับคู่การชำระเงิน
           const matchedPayment = await paymentService.checkPaymentFromEmail(email);
           
           if (matchedPayment) {
-            console.log(`PaymentChecker: Payment matched! User: ${matchedPayment.lineUserId}, Amount: ${matchedPayment.totalAmount}, Credits: ${matchedPayment.credits}`);
-            
-            // ส่งการแจ้งเตือนให้ผู้ใช้
-            await this.notifyPaymentSuccess(matchedPayment);
-            
-            processedCount++;
+            console.log('🎉 PAYMENT SUCCESSFULLY MATCHED AND PROCESSED!');
+            matchedCount++;
+          } else {
+            console.log('❌ No payment matched for this email');
           }
+          
+          processedCount++;
           
           // อัปเดตสถานะว่าประมวลผลแล้ว
           await emailCollection.updateOne(
@@ -72,13 +99,14 @@ class PaymentChecker {
             { 
               $set: { 
                 paymentProcessed: true,
-                paymentProcessedAt: new Date()
+                paymentProcessedAt: new Date(),
+                paymentMatched: !!matchedPayment
               }
             }
           );
           
         } catch (error) {
-          console.error(`PaymentChecker: Error processing email ${email._id}:`, error);
+          console.error(`❌ Error processing email ${email._id}:`, error);
           
           // อัปเดตสถานะว่าเกิดข้อผิดพลาด
           await emailCollection.updateOne(
@@ -87,7 +115,8 @@ class PaymentChecker {
               $set: { 
                 paymentProcessed: true,
                 paymentProcessError: error.message,
-                paymentProcessedAt: new Date()
+                paymentProcessedAt: new Date(),
+                paymentMatched: false
               }
             }
           );
@@ -95,12 +124,18 @@ class PaymentChecker {
       }
 
       // ตรวจสอบและหมดอายุรายการที่เก่า
-      await paymentService.expireOldTransactions();
+      const expiredCount = await paymentService.expireOldTransactions();
 
-      console.log(`PaymentChecker: Processed ${processedCount} payments from ${unprocessedEmails.length} emails`);
+      console.log('\n📊 PAYMENT CHECKER SUMMARY:');
+      console.log('============================');
+      console.log(`📧 Emails processed: ${processedCount}/${unprocessedEmails.length}`);
+      console.log(`✅ Payments matched: ${matchedCount}`);
+      console.log(`⏰ Payments expired: ${expiredCount}`);
+      console.log('=== PAYMENT CHECKER COMPLETED ===\n');
       
     } catch (error) {
-      console.error('PaymentChecker: Error in checkNewEmails:', error);
+      console.error('❌ PaymentChecker: Error in checkNewEmails:', error);
+      console.log('=== PAYMENT CHECKER FAILED ===\n');
     } finally {
       this.isChecking = false;
     }
