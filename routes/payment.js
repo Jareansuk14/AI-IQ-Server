@@ -177,10 +177,10 @@ router.get('/qr/:paymentId', async (req, res) => {
     const promptPayPhone = process.env.PROMPTPAY_PHONE || '0812345678';
     const qrResult = await qrCodeService.generatePromptPayQR(payment.totalAmount, promptPayPhone);
     
-    // คำนวณเวลาที่เหลือ
+    // คำนวณเวลาที่เหลือ (ให้แน่ใจว่าเป็น 10 นาที)
     const timeLeft = payment.expiresAt.getTime() - Date.now();
-    const minutesLeft = Math.floor(timeLeft / 60000);
-    const secondsLeft = Math.floor((timeLeft % 60000) / 1000);
+    const minutesLeft = Math.max(0, Math.floor(timeLeft / 60000));
+    const secondsLeft = Math.max(0, Math.floor((timeLeft % 60000) / 1000));
     
     // สร้างหน้าเว็บแสดง QR Code (Dark Theme)
     const htmlContent = `
@@ -495,10 +495,6 @@ router.get('/qr/:paymentId', async (req, res) => {
               <button class="btn btn-success" onclick="checkPayment()" id="check-btn">
                 🔍 ตรวจสอบการชำระเงิน
               </button>
-              
-              <button class="btn btn-primary" onclick="window.close()">
-                ❌ ปิดหน้าต่าง
-              </button>
             </div>
           </div>
         </div>
@@ -511,7 +507,7 @@ router.get('/qr/:paymentId', async (req, res) => {
           function updateTimer() {
             const expiresAt = new Date('${payment.expiresAt.toISOString()}');
             const now = new Date();
-            const timeLeft = expiresAt.getTime() - now.getTime();
+            const timeLeft = Math.max(0, expiresAt.getTime() - now.getTime());
             
             if (timeLeft <= 0) {
               document.getElementById('time-left').textContent = 'หมดอายุแล้ว';
@@ -527,7 +523,7 @@ router.get('/qr/:paymentId', async (req, res) => {
             const minutes = Math.floor(timeLeft / 60000);
             const seconds = Math.floor((timeLeft % 60000) / 1000);
             document.getElementById('time-left').textContent = 
-              minutes + ':' + seconds.toString().padStart(2, '0');
+              minutes + ':' + Math.max(0, seconds).toString().padStart(2, '0');
           }
           
           // แสดงข้อความสถานะ
