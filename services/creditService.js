@@ -50,10 +50,10 @@ class CreditService {
 
   // === ฟังก์ชันใหม่สำหรับแอดมิน ===
 
-  // เพิ่มเครดิตโดยแอดมิน
+// เพิ่มเครดิตโดยแอดมิน (รองรับการหักเครดิตด้วย)
   async addCreditByAdmin(userId, amount, reason, adminId) {
     try {
-      console.log(`Admin ${adminId} adding ${amount} credits to user ${userId}`);
+      console.log(`Admin ${adminId} ${amount > 0 ? 'adding' : 'subtracting'} ${Math.abs(amount)} credits to user ${userId}`);
       
       const user = await User.findOne({ lineUserId: userId });
       if (!user) {
@@ -62,35 +62,49 @@ class CreditService {
 
       const previousCredits = user.credits;
       user.credits += amount;
+      
+      // ป้องกันเครดิตติดลบ (safety net)
+      if (user.credits < 0) {
+        user.credits = 0;
+      }
+      
       await user.save();
+
+      // === กำหนดประเภทธุรกรรม ===
+      const transactionType = amount > 0 ? 'admin_add' : 'admin_subtract';
 
       // บันทึกธุรกรรมพร้อมระบุว่าเป็นการเพิ่มโดยแอดมิน
       await CreditTransaction.create({
         user: user._id,
         amount,
-        type: 'admin_add', // ประเภทใหม่สำหรับการเพิ่มโดยแอดมิน
+        type: transactionType, // ใช้ type ใหม่
         description: reason,
-        addedByAdmin: adminId // เพิ่ม field ใหม่ในโมเดล
+        addedByAdmin: adminId
       });
 
       console.log(`Credits updated: ${previousCredits} -> ${user.credits} for user ${userId}`);
 
-      // ส่งการแจ้งเตือนไปยัง LINE (ถ้ามี lineService)
+      // === ส่งการแจ้งเตือนไปยัง LINE (ปรับข้อความ) ===
       try {
-        await lineService.pushMessage(userId, {
+        const actionText = amount > 0 ? 'ได้รับเครดิตเพิ่ม' : 'เครดิตถูกหัก';
+        const emoji = amount > 0 ? '🎁' : '📉';
+        const amountText = Math.abs(amount);
+        
+        const message = {
           type: 'text',
-          text: `🎁 ยินดีด้วย! คุณได้รับเครดิตเพิ่ม ${amount} เครดิต\n\n💎 เครดิตปัจจุบัน: ${user.credits} เครดิต\n📝 หมายเหตุ: ${reason}\n\n✨ ขอบคุณที่ใช้บริการ!`
-        });
-        console.log(`Notification sent to user ${userId}`);
+          text: `${emoji} ${actionText} ${amountText} เครดิต\n\n💎 เครดิตปัจจุบัน: ${user.credits} เครดิต\n📝 หมายเหตุ: ${reason}\n\n${amount > 0 ? '✨ ขอบคุณที่ใช้บริการ!' : '⚠️ กรุณาตรวจสอบการใช้งาน'}`
+        };
+
+        await lineService.pushMessage(userId, message);
+        console.log(`Notification sent to user ${userId}: ${actionText} ${amountText} credits`);
       } catch (notificationError) {
         console.error('Error sending credit notification:', notificationError);
-        // ไม่ throw error เพราะการเพิ่มเครดิตสำเร็จแล้ว
-        // แค่การส่งแจ้งเตือนที่ล้มเหลว
+        // ไม่ throw error เพราะการเพิ่ม/หักเครดิตสำเร็จแล้ว
       }
 
       return user.credits;
     } catch (error) {
-      console.error('Error adding credit by admin:', error);
+      console.error('Error managing credit by admin:', error);
       throw error;
     }
   }

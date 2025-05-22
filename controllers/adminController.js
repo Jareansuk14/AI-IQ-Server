@@ -348,18 +348,21 @@ const getInsights = async (req, res) => {
 // === ฟังก์ชันใหม่สำหรับจัดการเครดิต ===
 
 // เพิ่มเครดิตให้ผู้ใช้
+// เพิ่มเครดิตให้ผู้ใช้ (รองรับการหักเครดิตด้วย)
 const addCreditToUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, reason } = req.body;
     const adminId = req.admin._id;
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ message: 'จำนวนเครดิตต้องมากกว่า 0' });
+    // === ปรับ Validation ใหม่ให้รองรับค่าลบ ===
+    if (amount === undefined || amount === null || amount === 0) {
+      return res.status(400).json({ message: 'จำนวนเครดิตต้องไม่เป็น 0' });
     }
 
-    if (amount > 1000) {
-      return res.status(400).json({ message: 'ไม่สามารถเพิ่มเครดิตเกิน 1000 ครั้งละครั้งได้' });
+    // ตรวจสอบขีดจำกัด
+    if (Math.abs(amount) > 1000) {
+      return res.status(400).json({ message: 'จำนวนเครดิตต้องไม่เกิน 1000 ในแต่ละครั้ง' });
     }
 
     // หาผู้ใช้
@@ -368,28 +371,45 @@ const addCreditToUser = async (req, res) => {
       return res.status(404).json({ message: 'ไม่พบผู้ใช้' });
     }
 
-    // เพิ่มเครดิตผ่าน creditService
+    // === ตรวจสอบการหักเครดิต ===
+    if (amount < 0) {
+      const newCredits = user.credits + amount; // amount เป็นค่าลบอยู่แล้ว
+      if (newCredits < 0) {
+        return res.status(400).json({ 
+          message: `ไม่สามารถหักเครดิตได้ เครดิตจะติดลบ (${newCredits})`,
+          currentCredits: user.credits,
+          requestedDeduction: Math.abs(amount)
+        });
+      }
+    }
+
+    // เพิ่ม/หักเครดิตผ่าน creditService
     const newCredits = await creditService.addCreditByAdmin(
       user.lineUserId,
       parseInt(amount),
-      reason || 'เพิ่มเครดิตโดยแอดมิน',
+      reason || `${amount > 0 ? 'เพิ่ม' : 'หัก'}เครดิตโดยแอดมิน`,
       adminId
     );
 
+    // === ปรับ Response Message ===
+    const actionText = amount > 0 ? 'เพิ่ม' : 'หัก';
+    const responseMessage = `${actionText}เครดิตสำเร็จ`;
+
     res.json({
-      message: 'เพิ่มเครดิตสำเร็จ',
+      message: responseMessage,
       user: {
         id: user._id,
         displayName: user.displayName,
         lineUserId: user.lineUserId,
         previousCredits: user.credits,
         newCredits: newCredits,
-        creditsAdded: amount
+        creditsChanged: Math.abs(amount),
+        action: amount > 0 ? 'add' : 'subtract'
       }
     });
   } catch (error) {
-    console.error('Error adding credit to user:', error);
-    res.status(500).json({ message: error.message || 'เกิดข้อผิดพลาดในการเพิ่มเครดิต' });
+    console.error('Error managing user credit:', error);
+    res.status(500).json({ message: error.message || 'เกิดข้อผิดพลาดในการจัดการเครดิต' });
   }
 };
 

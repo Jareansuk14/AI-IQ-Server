@@ -12,7 +12,7 @@ const CreditTransactionSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['use', 'initial', 'referral', 'referred', 'purchase', 'admin_add'], // เพิ่ม 'admin_add'
+    enum: ['use', 'initial', 'referral', 'referred', 'purchase', 'admin_add', 'admin_subtract'], // เพิ่ม 'admin_add'
     required: true
   },
   description: {
