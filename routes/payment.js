@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const PaymentTransaction = require('../models/paymentTransaction');
 const qrCodeService = require('../services/qrCodeService');
-const axios = require('axios'); // เปลี่ยนจาก node-fetch เป็น axios
+const axios = require('axios');
 require('dotenv').config();
 
-// แสดงหน้า QR Code สำหรับการชำระเงิน
+// แสดงหน้า QR Code สำหรับการชำระเงิน (Dark Theme)
 router.get('/qr/:paymentId', async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -22,14 +22,35 @@ router.get('/qr/:paymentId', async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>ไม่พบรายการชำระเงิน</title>
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                   text-align: center; padding: 50px; background-color: #f5f5f5; }
-            .error { color: #e74c3c; font-size: 24px; font-weight: bold; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              text-align: center; 
+              padding: 50px; 
+              background: linear-gradient(135deg, #141414 0%, #1f1f1f 100%);
+              color: #fff;
+              min-height: 100vh;
+            }
+            .error { 
+              color: #ff4d4f; 
+              font-size: 24px; 
+              font-weight: bold;
+              text-shadow: 0 0 10px rgba(255, 77, 79, 0.3);
+            }
+            .container {
+              background: rgba(31, 31, 31, 0.8);
+              border-radius: 15px;
+              padding: 40px;
+              border: 1px solid #303030;
+              max-width: 400px;
+              margin: 0 auto;
+            }
           </style>
         </head>
         <body>
-          <div class="error">❌ ไม่พบรายการชำระเงิน</div>
-          <p>รายการนี้อาจถูกลบหรือไม่มีอยู่ในระบบ</p>
+          <div class="container">
+            <div class="error">❌ ไม่พบรายการชำระเงิน</div>
+            <p style="color: #bfbfbf;">รายการนี้อาจถูกลบหรือไม่มีอยู่ในระบบ</p>
+          </div>
         </body>
         </html>
       `);
@@ -43,19 +64,19 @@ router.get('/qr/:paymentId', async (req, res) => {
       switch (payment.status) {
         case 'completed':
           statusText = '✅ ชำระเงินเรียบร้อยแล้ว';
-          statusColor = '#27ae60';
+          statusColor = '#49aa19';
           break;
         case 'expired':
           statusText = '⏰ หมดอายุแล้ว';
-          statusColor = '#e74c3c';
+          statusColor = '#ff4d4f';
           break;
         case 'cancelled':
           statusText = '❌ ยกเลิกแล้ว';
-          statusColor = '#95a5a6';
+          statusColor = '#8c8c8c';
           break;
         default:
           statusText = '❓ สถานะไม่ชัดเจน';
-          statusColor = '#f39c12';
+          statusColor = '#d89614';
       }
       
       return res.send(`
@@ -66,18 +87,38 @@ router.get('/qr/:paymentId', async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>สถานะการชำระเงิน</title>
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                   text-align: center; padding: 50px; background-color: #f5f5f5; }
-            .status { color: ${statusColor}; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-            .info { background: white; padding: 20px; border-radius: 10px; 
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              text-align: center; 
+              padding: 50px; 
+              background: linear-gradient(135deg, #141414 0%, #1f1f1f 100%);
+              color: #fff;
+              min-height: 100vh;
+            }
+            .status { 
+              color: ${statusColor}; 
+              font-size: 24px; 
+              font-weight: bold; 
+              margin-bottom: 20px;
+              text-shadow: 0 0 10px ${statusColor}40;
+            }
+            .info { 
+              background: rgba(31, 31, 31, 0.8); 
+              padding: 30px; 
+              border-radius: 15px; 
+              border: 1px solid #303030;
+              max-width: 400px; 
+              margin: 0 auto;
+            }
+            .amount { color: #177ddc; font-weight: bold; }
+            .credits { color: #49aa19; font-weight: bold; }
           </style>
         </head>
         <body>
           <div class="info">
             <div class="status">${statusText}</div>
-            <p>จำนวนเงิน: ${payment.totalAmount.toFixed(2)} บาท</p>
-            <p>เครดิต: ${payment.credits} เครดิต</p>
+            <p>จำนวนเงิน: <span class="amount">${payment.totalAmount.toFixed(2)} บาท</span></p>
+            <p>เครดิต: <span class="credits">${payment.credits} เครดิต</span></p>
           </div>
         </body>
         </html>
@@ -98,14 +139,35 @@ router.get('/qr/:paymentId', async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>หมดอายุแล้ว</title>
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                   text-align: center; padding: 50px; background-color: #f5f5f5; }
-            .expired { color: #e74c3c; font-size: 24px; font-weight: bold; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              text-align: center; 
+              padding: 50px; 
+              background: linear-gradient(135deg, #141414 0%, #1f1f1f 100%);
+              color: #fff;
+              min-height: 100vh;
+            }
+            .expired { 
+              color: #ff4d4f; 
+              font-size: 24px; 
+              font-weight: bold;
+              text-shadow: 0 0 10px rgba(255, 77, 79, 0.3);
+            }
+            .container {
+              background: rgba(31, 31, 31, 0.8);
+              border-radius: 15px;
+              padding: 40px;
+              border: 1px solid #303030;
+              max-width: 400px;
+              margin: 0 auto;
+            }
           </style>
         </head>
         <body>
-          <div class="expired">⏰ รายการนี้หมดอายุแล้ว</div>
-          <p>กรุณาสร้างรายการใหม่เพื่อเติมเครดิต</p>
+          <div class="container">
+            <div class="expired">⏰ รายการนี้หมดอายุแล้ว</div>
+            <p style="color: #bfbfbf;">กรุณาสร้างรายการใหม่เพื่อเติมเครดิต</p>
+          </div>
         </body>
         </html>
       `);
@@ -120,165 +182,239 @@ router.get('/qr/:paymentId', async (req, res) => {
     const minutesLeft = Math.floor(timeLeft / 60000);
     const secondsLeft = Math.floor((timeLeft % 60000) / 1000);
     
-    // สร้างหน้าเว็บแสดง QR Code
+    // สร้างหน้าเว็บแสดง QR Code (Dark Theme)
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="th">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>ชำระเงินด้วย QR Code</title>
+        <title>💳 ชำระเงินด้วย QR Code AI</title>
         <style>
           body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #141414 0%, #1f1f1f 100%);
             margin: 0;
             padding: 20px;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            color: #fff;
           }
           .container {
-            background: white;
+            background: rgba(31, 31, 31, 0.95);
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(23, 125, 220, 0.1);
+            max-width: 420px;
             width: 100%;
             overflow: hidden;
+            border: 1px solid #303030;
           }
           .header {
-            background: linear-gradient(45deg, #42A5F5, #1E88E5);
+            background: linear-gradient(45deg, #177ddc, #1890ff);
             color: white;
-            padding: 20px;
+            padding: 25px 20px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+          }
+          .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transform: translateX(-100%);
+            animation: shimmer 2s infinite;
+          }
+          @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
           }
           .header h1 {
             margin: 0;
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
           }
+          .header .subtitle {
+            margin-top: 8px;
+            font-size: 14px;
+            opacity: 0.9;
+          }
           .content {
-            padding: 30px 20px;
+            padding: 30px 25px;
             text-align: center;
           }
           .qr-container {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            border: 3px dashed #42A5F5;
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border-radius: 20px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 2px solid #177ddc;
+            box-shadow: 0 0 20px rgba(23, 125, 220, 0.2);
+            position: relative;
+          }
+          .qr-container::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #177ddc, #1890ff, #177ddc);
+            border-radius: 20px;
+            z-index: -1;
+            animation: border-glow 3s infinite;
+          }
+          @keyframes border-glow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
           }
           .qr-code {
             max-width: 100%;
             height: auto;
-            border-radius: 10px;
+            border-radius: 15px;
+            background: white;
+            padding: 10px;
           }
           .amount {
-            font-size: 32px;
+            font-size: 36px;
             font-weight: bold;
-            color: #2c3e50;
-            margin: 20px 0;
+            color: #177ddc;
+            margin: 25px 0;
+            text-shadow: 0 0 10px rgba(23, 125, 220, 0.3);
           }
           .package-info {
-            background: #e8f4fd;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #303030;
+          }
+          .package-info strong {
+            color: #49aa19;
           }
           .timer {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 8px;
-            padding: 10px;
-            margin: 15px 0;
+            background: linear-gradient(145deg, #2b2611, #1e1a08);
+            border: 1px solid #d89614;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
             font-weight: bold;
-            color: #856404;
+            color: #d89614;
+            box-shadow: 0 0 10px rgba(216, 150, 20, 0.2);
+          }
+          .timer.expired {
+            background: linear-gradient(145deg, #2b1619, #1e0e11);
+            border-color: #ff4d4f;
+            color: #ff4d4f;
+            box-shadow: 0 0 10px rgba(255, 77, 79, 0.2);
           }
           .instructions {
             text-align: left;
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #303030;
           }
           .instructions h3 {
             margin-top: 0;
-            color: #495057;
+            color: #fff;
+            font-size: 16px;
           }
           .instructions ol {
             padding-left: 20px;
+            margin: 15px 0;
           }
           .instructions li {
-            margin: 8px 0;
-            color: #6c757d;
+            margin: 10px 0;
+            color: #bfbfbf;
+            line-height: 1.5;
+          }
+          .instructions strong {
+            color: #177ddc;
           }
           .btn {
             border: none;
-            border-radius: 8px;
-            padding: 12px 24px;
+            border-radius: 10px;
+            padding: 15px 25px;
             font-size: 16px;
             cursor: pointer;
-            margin: 5px;
-            transition: all 0.3s;
+            margin: 8px;
+            transition: all 0.3s ease;
             font-weight: bold;
+            position: relative;
+            overflow: hidden;
           }
           .btn-primary {
-            background: #42A5F5;
+            background: linear-gradient(45deg, #177ddc, #1890ff);
             color: white;
+            box-shadow: 0 4px 15px rgba(23, 125, 220, 0.3);
           }
           .btn-primary:hover:not(:disabled) {
-            background: #1E88E5;
-            transform: translateY(-1px);
+            background: linear-gradient(45deg, #1890ff, #40a9ff);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(23, 125, 220, 0.4);
           }
           .btn-success {
-            background: #4CAF50;
+            background: linear-gradient(45deg, #49aa19, #5cb027);
             color: white;
+            box-shadow: 0 4px 15px rgba(73, 170, 25, 0.3);
           }
-          .btn-warning {
-            background: #ff9800;
-            color: white;
+          .btn-success:hover:not(:disabled) {
+            background: linear-gradient(45deg, #5cb027, #6bc72f);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(73, 170, 25, 0.4);
           }
           .btn:disabled {
-            background: #cccccc;
-            color: #666666;
+            background: #404040;
+            color: #8c8c8c;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
           }
           .status-message {
             padding: 15px;
-            border-radius: 8px;
+            border-radius: 10px;
             margin: 15px 0;
             font-weight: bold;
             display: none;
+            border: 1px solid;
           }
           .status-success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
+            background: linear-gradient(145deg, #162312, #0f1a09);
+            border-color: #49aa19;
+            color: #49aa19;
+            box-shadow: 0 0 10px rgba(73, 170, 25, 0.2);
           }
           .status-error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
+            background: linear-gradient(145deg, #2b1619, #1e0e11);
+            border-color: #ff4d4f;
+            color: #ff4d4f;
+            box-shadow: 0 0 10px rgba(255, 77, 79, 0.2);
           }
           .status-info {
-            background: #d1ecf1;
-            border: 1px solid #bee5eb;
-            color: #0c5460;
+            background: linear-gradient(145deg, #1b2135, #0f1621);
+            border-color: #177ddc;
+            color: #177ddc;
+            box-shadow: 0 0 10px rgba(23, 125, 220, 0.2);
           }
           .button-container {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 20px;
+            gap: 12px;
+            margin-top: 25px;
           }
           .loading {
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #42A5F5;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid #177ddc;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-right: 10px;
@@ -294,6 +430,17 @@ router.get('/qr/:paymentId', async (req, res) => {
             .amount {
               font-size: 28px;
             }
+            .content {
+              padding: 20px 15px;
+            }
+          }
+          .pulse {
+            animation: pulse 2s infinite;
+          }
+          @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(23, 125, 220, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(23, 125, 220, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(23, 125, 220, 0); }
           }
         </style>
       </head>
@@ -301,6 +448,7 @@ router.get('/qr/:paymentId', async (req, res) => {
         <div class="container">
           <div class="header">
             <h1>💳 ชำระเงินด้วย QR Code</h1>
+            <div class="subtitle">AI Image Analysis Service</div>
           </div>
           
           <div class="content">
@@ -320,19 +468,17 @@ router.get('/qr/:paymentId', async (req, res) => {
               <!-- ข้อความสถานะจะแสดงที่นี่ -->
             </div>
             
-            <div class="qr-container">
-              <img src="${qrResult.qrCodeDataURL}" alt="QR Code" class="qr-code" />
+            <div class="qr-container pulse">
+              <img src="${qrResult.qrCodeDataURL}" alt="QR Code สำหรับชำระเงิน" class="qr-code" />
             </div>
             
             <div class="instructions">
               <h3>📱 วิธีการชำระเงิน:</h3>
               <ol>
+                <li>กดปุ่ม <strong>"ตรวจสอบการชำระเงิน"</strong> ด้านล่าง</li>
                 <li>เปิดแอปธนาคารของคุณ</li>
-                <li>เลือก "สแกน QR" หรือ "พร้อมเพย์"</li>
-                <li>สแกน QR Code ด้านบน</li>
-                <li>ตรวจสอบจำนวนเงิน <strong>${payment.totalAmount.toFixed(2)} บาท</strong></li>
-                <li>ยืนยันการโอนเงิน</li>
-                <li>กดปุ่ม "ตรวจสอบการชำระเงิน" ด้านล่าง</li>
+                <li>สแกน QR Code เพื่อชำระเงิน</li>
+                <li>ยืนยันการโอนเงิน <strong>${payment.totalAmount.toFixed(2)} บาท</strong></li>
               </ol>
             </div>
             
@@ -360,8 +506,8 @@ router.get('/qr/:paymentId', async (req, res) => {
             
             if (timeLeft <= 0) {
               document.getElementById('time-left').textContent = 'หมดอายุแล้ว';
-              document.getElementById('timer').style.backgroundColor = '#f8d7da';
-              document.getElementById('timer').style.color = '#721c24';
+              const timer = document.getElementById('timer');
+              timer.classList.add('expired');
               document.getElementById('check-btn').disabled = true;
               setTimeout(() => {
                 window.location.reload();
@@ -391,7 +537,7 @@ router.get('/qr/:paymentId', async (req, res) => {
           // ตรวจสอบการชำระเงิน
           async function checkPayment() {
             if (!canCheck) {
-              showStatus('กรุณารออีก ' + Math.ceil((nextCheckTime - Date.now()) / 1000) + ' วินาที', 'warning');
+              showStatus('กรุณารออีก ' + Math.ceil((nextCheckTime - Date.now()) / 1000) + ' วินาที', 'info');
               return;
             }
             
@@ -413,6 +559,11 @@ router.get('/qr/:paymentId', async (req, res) => {
                   showStatus('🎉 ชำระเงินสำเร็จ! เครดิตได้ถูกเพิ่มแล้ว', 'success');
                   checkBtn.innerHTML = '✅ ชำระเงินสำเร็จ';
                   checkBtn.disabled = true;
+                  checkBtn.classList.remove('btn-success');
+                  checkBtn.style.background = 'linear-gradient(45deg, #49aa19, #5cb027)';
+                  
+                  // แสดงเอฟเฟกต์สำเร็จ
+                  document.querySelector('.qr-container').classList.remove('pulse');
                   
                   // รีไดเรกต์หลัง 3 วินาที
                   setTimeout(() => {
@@ -476,14 +627,35 @@ router.get('/qr/:paymentId', async (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>เกิดข้อผิดพลาด</title>
         <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                 text-align: center; padding: 50px; background-color: #f5f5f5; }
-          .error { color: #e74c3c; font-size: 24px; font-weight: bold; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            padding: 50px; 
+            background: linear-gradient(135deg, #141414 0%, #1f1f1f 100%);
+            color: #fff;
+            min-height: 100vh;
+          }
+          .error { 
+            color: #ff4d4f; 
+            font-size: 24px; 
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 77, 79, 0.3);
+          }
+          .container {
+            background: rgba(31, 31, 31, 0.8);
+            border-radius: 15px;
+            padding: 40px;
+            border: 1px solid #303030;
+            max-width: 400px;
+            margin: 0 auto;
+          }
         </style>
       </head>
       <body>
-        <div class="error">❌ เกิดข้อผิดพลาด</div>
-        <p>ไม่สามารถแสดง QR Code ได้ กรุณาลองใหม่อีกครั้ง</p>
+        <div class="container">
+          <div class="error">❌ เกิดข้อผิดพลาด</div>
+          <p style="color: #bfbfbf;">ไม่สามารถแสดง QR Code ได้ กรุณาลองใหม่อีกครั้ง</p>
+        </div>
       </body>
       </html>
     `);
@@ -514,7 +686,7 @@ router.get('/status/:paymentId', async (req, res) => {
   }
 });
 
-module.exports = router;
+// API สำหรับตรวจสอบการชำระเงินแบบ manual
 router.post('/manual-check/:paymentId', async (req, res) => {
   try {
     const { paymentId } = req.params;
@@ -648,3 +820,5 @@ router.post('/manual-check/:paymentId', async (req, res) => {
     });
   }
 });
+
+module.exports = router;
