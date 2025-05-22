@@ -221,7 +221,7 @@ class PaymentService {
     }
   }
 
-  // แปลงวันที่และเวลาจากอีเมลเป็น Date object
+  // แปลงวันที่และเวลาจากอีเมลเป็น Date object (เวลาไทย UTC+7)
   parseEmailDateTime(dateStr, timeStr) {
     try {
       console.log(`\n📅 Parsing date/time: "${dateStr}" "${timeStr}"`);
@@ -259,8 +259,9 @@ class PaymentService {
 
       console.log(`   Converted year: ${year} -> ${fullYear}`);
 
-      // สร้าง Date object
-      const date = new Date(
+      // สร้าง Date object ในเวลาไทย (UTC+7)
+      // เนื่องจากเวลาจากอีเมลเป็นเวลาไทย ต้องลบ 7 ชั่วโมงเพื่อแปลงเป็น UTC
+      const localDate = new Date(
         fullYear,
         parseInt(month) - 1, // เดือนใน JavaScript เริ่มจาก 0
         parseInt(day),
@@ -269,15 +270,19 @@ class PaymentService {
         0
       );
 
-      if (isNaN(date.getTime())) {
-        console.log('❌ Invalid date created');
+      if (isNaN(localDate.getTime())) {
+        console.log('❌ Invalid local date created');
         return null;
       }
 
-      console.log(`✅ Parsed successfully: ${date.toISOString()}`);
-      console.log(`   Local time (Bangkok): ${date.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+      // แปลงจากเวลาไทยเป็น UTC โดยลบ 7 ชั่วโมง
+      const utcDate = new Date(localDate.getTime() - (7 * 60 * 60 * 1000));
+
+      console.log(`✅ Local date (Thai time): ${localDate.toISOString()}`);
+      console.log(`✅ UTC date for comparison: ${utcDate.toISOString()}`);
+      console.log(`   Bangkok time: ${utcDate.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
       
-      return date;
+      return utcDate;
     } catch (error) {
       console.error('❌ Error parsing email date time:', error);
       return null;
