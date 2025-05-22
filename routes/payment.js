@@ -5,13 +5,77 @@ const qrCodeService = require('../services/qrCodeService');
 const axios = require('axios'); // เปลี่ยนจาก node-fetch เป็น axios
 require('dotenv').config();
 
+// เส้นทางสำหรับทดสอบว่า payment routes ทำงานหรือไม่
+router.get('/', (req, res) => {
+  res.json({ 
+    message: 'Payment API is working!', 
+    timestamp: new Date().toISOString(),
+    availableEndpoints: [
+      'GET /api/payment/qr/:paymentId',
+      'POST /api/payment/manual-check/:paymentId', 
+      'GET /api/payment/status/:paymentId'
+    ]
+  });
+});
+
 // แสดงหน้า QR Code สำหรับการชำระเงิน
 router.get('/qr/:paymentId', async (req, res) => {
   try {
     const { paymentId } = req.params;
     
+    console.log(`🔍 QR Code requested for payment: ${paymentId}`);
+    
+    // ตรวจสอบ format ของ paymentId
+    if (!paymentId || paymentId.length !== 24) {
+      console.log('❌ Invalid payment ID format');
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>รูปแบบ Payment ID ไม่ถูกต้อง</title>
+        </head>
+        <body style="text-align: center; padding: 50px; font-family: Arial;">
+          <h1>❌ รูปแบบ Payment ID ไม่ถูกต้อง</h1>
+          <p>Payment ID: ${paymentId}</p>
+          <p>รูปแบบที่ถูกต้องควรมี 24 ตัวอักษร</p>
+        </body>
+        </html>
+      `);
+    }
+    
     // ค้นหารายการชำระเงิน
     const payment = await PaymentTransaction.findById(paymentId).populate('user');
+    
+    if (!payment) {
+      console.log(`❌ Payment not found: ${paymentId}`);
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>ไม่พบรายการชำระเงิน</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                   text-align: center; padding: 50px; background-color: #f5f5f5; }
+            .error { color: #e74c3c; font-size: 24px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <div class="error">❌ ไม่พบรายการชำระเงิน</div>
+          <p>Payment ID: ${paymentId}</p>
+          <p>รายการนี้อาจถูกลบหรือไม่มีอยู่ในระบบ</p>
+          <button onclick="window.close()">ปิดหน้าต่าง</button>
+        </body>
+        </html>
+      `);
+    }
+    
+    console.log(`✅ Payment found: ${payment.packageType}, ${payment.totalAmount} บาท, Status: ${payment.status}`);
+    
+    // ตรวจสอบสถานะและอายุ (โค้ดเดิม...)
     
     if (!payment) {
       return res.status(404).send(`

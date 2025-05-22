@@ -436,7 +436,7 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
           },
           {
             type: "text",
-            text: "📱 สแกน QR Code ด้านล่างเพื่อชำระเงิน",
+            text: "📱 กดปุ่มด้านล่างเพื่อเปิดหน้าชำระเงิน",
             color: "#666666",
             size: "sm",
             margin: "md",
@@ -455,7 +455,7 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
             style: "primary",
             action: {
               type: "uri",
-              label: "ดู QR Code",
+              label: "เปิดหน้าชำระเงิน",
               uri: qrCodeURL
             },
             color: "#42A5F5"
