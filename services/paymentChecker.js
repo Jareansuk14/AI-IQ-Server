@@ -152,13 +152,17 @@ class PaymentChecker {
         '100_credit': '100 เครดิต'
       };
 
+      // ดึงเครดิตปัจจุบันของผู้ใช้
+      const creditService = require('./creditService');
+      const totalCredits = await creditService.checkCredit(paymentTransaction.lineUserId);
+
       const message = {
         type: 'text',
-        text: `🎉 ชำระเงินสำเร็จ!\n\n💰 จำนวนเงิน: ${paymentTransaction.totalAmount.toFixed(2)} บาท\n💎 ได้รับเครดิต: ${paymentTransaction.credits} เครดิต\n📦 แพ็คเกจ: ${packageNames[paymentTransaction.packageType]}\n\nเครดิตได้ถูกเพิ่มเข้าบัญชีของคุณแล้ว ขอบคุณที่ใช้บริการ! ✨`
+        text: `🎉 ชำระเงินสำเร็จ!\n\n💰 จำนวนเงิน: ${paymentTransaction.totalAmount.toFixed(2)} บาท\n💎 ได้รับเครดิต: ${paymentTransaction.credits} เครดิต\n📦 แพ็คเกจ: ${packageNames[paymentTransaction.packageType]}\n📊 เครดิตรวมทั้งหมด: ${totalCredits} เครดิต\n\nเครดิตได้ถูกเพิ่มเข้าบัญชีของคุณแล้ว ขอบคุณที่ใช้บริการ! ✨`
       };
 
       await lineService.pushMessage(paymentTransaction.lineUserId, message);
-      console.log(`PaymentChecker: Notification sent to user ${paymentTransaction.lineUserId}`);
+      console.log(`PaymentChecker: Notification sent to user ${paymentTransaction.lineUserId} (Total credits: ${totalCredits})`);
       
     } catch (error) {
       console.error('PaymentChecker: Error sending payment notification:', error);

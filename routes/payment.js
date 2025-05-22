@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const PaymentTransaction = require('../models/paymentTransaction');
 const qrCodeService = require('../services/qrCodeService');
+const fetch = require('node-fetch'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 // แสดงหน้า QR Code สำหรับการชำระเงิน
@@ -111,7 +112,7 @@ router.get('/qr/:paymentId', async (req, res) => {
     }
     
     // สร้าง QR Code
-    const promptPayPhone = process.env.PROMPTPAY_PHONE || '0616300453';
+    const promptPayPhone = process.env.PROMPTPAY_PHONE || '0812345678';
     const qrResult = await qrCodeService.generatePromptPayQR(payment.totalAmount, promptPayPhone);
     
     // คำนวณเวลาที่เหลือ
@@ -212,19 +213,79 @@ router.get('/qr/:paymentId', async (req, res) => {
             margin: 8px 0;
             color: #6c757d;
           }
-          .refresh-btn {
-            background: #42A5F5;
-            color: white;
+          .btn {
             border: none;
             border-radius: 8px;
             padding: 12px 24px;
             font-size: 16px;
             cursor: pointer;
-            margin-top: 15px;
-            transition: background-color 0.3s;
+            margin: 5px;
+            transition: all 0.3s;
+            font-weight: bold;
           }
-          .refresh-btn:hover {
+          .btn-primary {
+            background: #42A5F5;
+            color: white;
+          }
+          .btn-primary:hover:not(:disabled) {
             background: #1E88E5;
+            transform: translateY(-1px);
+          }
+          .btn-success {
+            background: #4CAF50;
+            color: white;
+          }
+          .btn-warning {
+            background: #ff9800;
+            color: white;
+          }
+          .btn:disabled {
+            background: #cccccc;
+            color: #666666;
+            cursor: not-allowed;
+            transform: none;
+          }
+          .status-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+            display: none;
+          }
+          .status-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+          }
+          .status-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+          }
+          .status-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+          }
+          .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+          }
+          .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #42A5F5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+          }
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
           }
           @media (max-width: 480px) {
             .container {
@@ -255,6 +316,10 @@ router.get('/qr/:paymentId', async (req, res) => {
               ⏰ เหลือเวลา: <span id="time-left">${minutesLeft}:${secondsLeft.toString().padStart(2, '0')}</span>
             </div>
             
+            <div class="status-message" id="status-message">
+              <!-- ข้อความสถานะจะแสดงที่นี่ -->
+            </div>
+            
             <div class="qr-container">
               <img src="${qrResult.qrCodeDataURL}" alt="QR Code" class="qr-code" />
             </div>
@@ -267,17 +332,26 @@ router.get('/qr/:paymentId', async (req, res) => {
                 <li>สแกน QR Code ด้านบน</li>
                 <li>ตรวจสอบจำนวนเงิน <strong>${payment.totalAmount.toFixed(2)} บาท</strong></li>
                 <li>ยืนยันการโอนเงิน</li>
-                <li>รอการอัปเดตเครดิตใน LINE (1-3 นาที)</li>
+                <li>กดปุ่ม "ตรวจสอบการชำระเงิน" ด้านล่าง</li>
               </ol>
             </div>
             
-            <button class="refresh-btn" onclick="window.location.reload()">
-              🔄 รีเฟรชหน้า
-            </button>
+            <div class="button-container">
+              <button class="btn btn-success" onclick="checkPayment()" id="check-btn">
+                🔍 ตรวจสอบการชำระเงิน
+              </button>
+              
+              <button class="btn btn-primary" onclick="window.location.reload()">
+                🔄 รีเฟรชหน้า
+              </button>
+            </div>
           </div>
         </div>
         
         <script>
+          let canCheck = true;
+          let checkInterval;
+          
           // ตัวจับเวลาแบบเรียลไทม์
           function updateTimer() {
             const expiresAt = new Date('${payment.expiresAt.toISOString()}');
@@ -288,6 +362,7 @@ router.get('/qr/:paymentId', async (req, res) => {
               document.getElementById('time-left').textContent = 'หมดอายุแล้ว';
               document.getElementById('timer').style.backgroundColor = '#f8d7da';
               document.getElementById('timer').style.color = '#721c24';
+              document.getElementById('check-btn').disabled = true;
               setTimeout(() => {
                 window.location.reload();
               }, 2000);
@@ -300,23 +375,91 @@ router.get('/qr/:paymentId', async (req, res) => {
               minutes + ':' + seconds.toString().padStart(2, '0');
           }
           
+          // แสดงข้อความสถานะ
+          function showStatus(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message status-' + type;
+            statusDiv.style.display = 'block';
+          }
+          
+          // ซ่อนข้อความสถานะ
+          function hideStatus() {
+            document.getElementById('status-message').style.display = 'none';
+          }
+          
+          // ตรวจสอบการชำระเงิน
+          async function checkPayment() {
+            if (!canCheck) {
+              showStatus('กรุณารออีก ' + Math.ceil((nextCheckTime - Date.now()) / 1000) + ' วินาที', 'warning');
+              return;
+            }
+            
+            const checkBtn = document.getElementById('check-btn');
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<span class="loading"></span>กำลังตรวจสอบ...';
+            
+            try {
+              // เรียก API ตรวจสอบการชำระเงิน
+              const response = await fetch('/api/payment/manual-check/${payment._id}', {
+                method: 'POST'
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                if (result.paymentCompleted) {
+                  // ชำระเงินสำเร็จ
+                  showStatus('🎉 ชำระเงินสำเร็จ! เครดิตได้ถูกเพิ่มแล้ว', 'success');
+                  checkBtn.innerHTML = '✅ ชำระเงินสำเร็จ';
+                  checkBtn.disabled = true;
+                  
+                  // รีไดเรกต์หลัง 3 วินาที
+                  setTimeout(() => {
+                    window.close();
+                  }, 3000);
+                } else {
+                  // ยังไม่พบการชำระเงิน
+                  showStatus('ยังไม่พบการชำระเงิน กรุณาลองอีกครั้งใน 30 วินาที', 'info');
+                  
+                  // ปิดการใช้งานปุ่มเป็นเวลา 30 วินาที
+                  canCheck = false;
+                  nextCheckTime = Date.now() + 30000;
+                  
+                  let countdown = 30;
+                  checkBtn.innerHTML = '⏰ รอ ' + countdown + ' วินาที';
+                  
+                  const countdownInterval = setInterval(() => {
+                    countdown--;
+                    if (countdown > 0) {
+                      checkBtn.innerHTML = '⏰ รอ ' + countdown + ' วินาที';
+                    } else {
+                      clearInterval(countdownInterval);
+                      canCheck = true;
+                      checkBtn.disabled = false;
+                      checkBtn.innerHTML = '🔍 ตรวจสอบการชำระเงิน';
+                      hideStatus();
+                    }
+                  }, 1000);
+                }
+              } else {
+                showStatus('เกิดข้อผิดพลาด: ' + result.message, 'error');
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = '🔍 ตรวจสอบการชำระเงิน';
+              }
+            } catch (error) {
+              console.error('Error checking payment:', error);
+              showStatus('เกิดข้อผิดพลาดในการตรวจสอบ กรุณาลองใหม่', 'error');
+              checkBtn.disabled = false;
+              checkBtn.innerHTML = '🔍 ตรวจสอบการชำระเงิน';
+            }
+          }
+          
           // อัปเดตทุกวินาที
           setInterval(updateTimer, 1000);
           
-          // ตรวจสอบสถานะการชำระเงินทุก 30 วินาที
-          setInterval(() => {
-            fetch('/api/payment/status/${paymentId}')
-              .then(response => response.json())
-              .then(data => {
-                if (data.status === 'completed') {
-                  alert('🎉 ชำระเงินสำเร็จ! เครดิตได้ถูกเพิ่มในบัญชีของคุณแล้ว');
-                  window.location.reload();
-                }
-              })
-              .catch(error => {
-                console.log('Error checking payment status:', error);
-              });
-          }, 30000);
+          // เก็บเวลาที่สามารถเช็คครั้งถัดไปได้
+          let nextCheckTime = 0;
         </script>
       </body>
       </html>
@@ -372,3 +515,137 @@ router.get('/status/:paymentId', async (req, res) => {
 });
 
 module.exports = router;
+router.post('/manual-check/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    
+    // ตรวจสอบ payment ที่มีอยู่
+    const payment = await PaymentTransaction.findById(paymentId);
+    
+    if (!payment) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'ไม่พบรายการชำระเงิน' 
+      });
+    }
+    
+    // ตรวจสอบว่าชำระเงินแล้วหรือไม่
+    if (payment.status === 'completed') {
+      return res.json({ 
+        success: true, 
+        paymentCompleted: true,
+        message: 'ชำระเงินเรียบร้อยแล้ว',
+        credits: payment.credits
+      });
+    }
+    
+    // ตรวจสอบว่าหมดอายุหรือไม่
+    if (payment.isExpired()) {
+      payment.status = 'expired';
+      await payment.save();
+      
+      return res.json({ 
+        success: false, 
+        message: 'รายการชำระเงินหมดอายุแล้ว' 
+      });
+    }
+    
+    console.log(`🔍 Manual payment check requested for payment: ${paymentId}`);
+    console.log(`   Amount: ${payment.totalAmount}, User: ${payment.lineUserId}`);
+    
+    // ส่งคำขอไปยัง Gmail Integration server เพื่อตรวจสอบ email ใหม่
+    try {
+      const gmailResponse = await fetch('https://gmail-mongodb-integration.onrender.com/check-emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000 // 10 วินาที timeout
+      });
+      
+      if (gmailResponse.ok) {
+        console.log('✅ Successfully triggered Gmail check');
+      } else {
+        console.log('⚠️ Gmail check request failed, but continuing with local check');
+      }
+    } catch (error) {
+      console.log('⚠️ Error calling Gmail integration:', error.message);
+      // ไม่ return error เพราะยังสามารถเช็คจาก local database ได้
+    }
+    
+    // รอสักครู่เพื่อให้ Gmail integration ประมวลผล
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // ตรวจสอบการชำระเงินจาก local database
+    const paymentService = require('../services/paymentService');
+    
+    // ดึงอีเมลล่าสุดที่ยังไม่ได้ประมวลผล
+    const { MongoClient } = require('mongodb');
+    const client = new MongoClient(process.env.MONGODB_URI);
+    await client.connect();
+    const db = client.db();
+    
+    const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000);
+    
+    const recentEmails = await db.collection('emails').find({
+      receivedAt: { $gte: oneMinuteAgo },
+      'transactionData.transactionType': 'เงินเข้า',
+      'transactionData.amount': payment.totalAmount
+    }).sort({ receivedAt: -1 }).toArray();
+    
+    await client.close();
+    
+    console.log(`📧 Found ${recentEmails.length} recent emails with amount ${payment.totalAmount}`);
+    
+    // ตรวจสอบแต่ละอีเมล
+    for (const email of recentEmails) {
+      try {
+        const matchedPayment = await paymentService.checkPaymentFromEmail(email);
+        
+        if (matchedPayment && matchedPayment._id.toString() === paymentId) {
+          console.log('🎉 Payment matched in manual check!');
+          
+          // ส่งการแจ้งเตือนใน LINE
+          const lineService = require('../services/lineService');
+          const creditService = require('../services/creditService');
+          
+          // ดูเครดิตปัจจุบัน
+          const currentCredits = await creditService.checkCredit(matchedPayment.lineUserId);
+          
+          const successMessage = {
+            type: 'text',
+            text: `🎉 ชำระเงินสำเร็จ!\n\n💰 จำนวนเงิน: ${matchedPayment.totalAmount.toFixed(2)} บาท\n💎 ได้รับเครดิต: ${matchedPayment.credits} เครดิต\n📊 เครดิตรวมทั้งหมด: ${currentCredits} เครดิต\n\nขอบคุณที่ใช้บริการ! ✨`
+          };
+          
+          await lineService.pushMessage(matchedPayment.lineUserId, successMessage);
+          
+          return res.json({ 
+            success: true, 
+            paymentCompleted: true,
+            message: 'ชำระเงินสำเร็จ',
+            credits: matchedPayment.credits,
+            totalCredits: currentCredits
+          });
+        }
+      } catch (error) {
+        console.error('Error checking email for payment:', error);
+      }
+    }
+    
+    // ยังไม่พบการชำระเงิน
+    console.log('❌ No payment found in manual check');
+    
+    return res.json({ 
+      success: true, 
+      paymentCompleted: false,
+      message: 'ยังไม่พบการชำระเงิน กรุณาลองอีกครั้งในภายหลัง'
+    });
+    
+  } catch (error) {
+    console.error('Error in manual payment check:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'เกิดข้อผิดพลาดในการตรวจสอบ: ' + error.message 
+    });
+  }
+});
