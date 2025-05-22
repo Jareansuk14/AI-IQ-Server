@@ -1,9 +1,9 @@
-//server.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs'); 
 const { connectDB, checkConnection } = require('./config/db');
+const paymentChecker = require('./services/paymentChecker'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 const app = express();
@@ -30,6 +30,7 @@ app.use(cors({
 app.use('/webhook', require('./routes/webhook'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
+app.use('/payment', require('./routes/payment')); // เพิ่มเส้นทางสำหรับการชำระเงิน
 
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
 app.get('/', (req, res) => {
@@ -47,6 +48,28 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// เพิ่ม API สำหรับตรวจสอบการชำระเงินแบบ manual (สำหรับ testing)
+app.get('/api/payment/check', async (req, res) => {
+  try {
+    await paymentChecker.manualCheck();
+    res.json({ message: 'Payment check completed' });
+  } catch (error) {
+    console.error('Manual payment check error:', error);
+    res.status(500).json({ error: 'Payment check failed' });
+  }
+});
+
+// เพิ่ม API สำหรับดูสถิติการตรวจสอบ
+app.get('/api/payment/stats', async (req, res) => {
+  try {
+    const stats = await paymentChecker.getCheckStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('Payment stats error:', error);
+    res.status(500).json({ error: 'Failed to get payment stats' });
+  }
+});
+
 // Serve static assets for the admin dashboard
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.resolve(__dirname, 'client', 'build');
@@ -57,7 +80,7 @@ if (process.env.NODE_ENV === 'production') {
     
     app.get('*', (req, res) => {
       // ยกเว้นเส้นทางสำหรับ API และ webhook
-      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment')) {
         return next();
       }
       res.sendFile(path.join(clientBuildPath, 'index.html'));
@@ -98,6 +121,12 @@ connectDB()
     if (process.env.CREATE_RICH_MENU === 'true') {
       require('./utils/createRichMenu');
     }
+    
+    // เริ่มระบบตรวจสอบการชำระเงินอัตโนมัติ
+    setTimeout(() => {
+      paymentChecker.startAutoCheck(2); // ตรวจสอบทุก 2 นาที
+      console.log('Payment checker started');
+    }, 5000); // รอ 5 วินาทีให้ระบบพร้อม
   })
   .catch(err => {
     console.error('Database connection attempt failed:', err);
@@ -108,3 +137,16 @@ connectDB()
       console.log(`Server running on port ${PORT}`);
     });
   });
+
+// จัดการการปิดโปรแกรมอย่างสะอาด
+process.on('SIGINT', async () => {
+  console.log('Shutting down gracefully...');
+  await paymentChecker.stop();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Shutting down gracefully...');
+  await paymentChecker.stop();
+  process.exit(0);
+});

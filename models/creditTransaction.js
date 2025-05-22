@@ -12,11 +12,15 @@ const CreditTransactionSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['use', 'initial', 'referral', 'referred'],
+    enum: ['use', 'initial', 'referral', 'referred', 'purchase'], // เพิ่ม 'purchase'
     required: true
   },
   description: {
     type: String
+  },
+  paymentTransaction: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'PaymentTransaction' // อ้างอิงถึงรายการชำระเงิน
   },
   createdAt: {
     type: Date,
