@@ -111,7 +111,7 @@ router.get('/qr/:paymentId', async (req, res) => {
     }
     
     // สร้าง QR Code
-    const promptPayPhone = process.env.PROMPTPAY_PHONE || '0123456789';
+    const promptPayPhone = process.env.PROMPTPAY_PHONE || '0616300453';
     const qrResult = await qrCodeService.generatePromptPayQR(payment.totalAmount, promptPayPhone);
     
     // คำนวณเวลาที่เหลือ
