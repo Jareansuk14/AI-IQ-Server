@@ -496,8 +496,8 @@ router.get('/qr/:paymentId', async (req, res) => {
                 🔍 ตรวจสอบการชำระเงิน
               </button>
               
-              <button class="btn btn-primary" onclick="window.location.reload()">
-                🔄 รีเฟรชหน้า
+              <button class="btn btn-primary" onclick="window.close()">
+                ❌ ปิดหน้าต่าง
               </button>
             </div>
           </div>
