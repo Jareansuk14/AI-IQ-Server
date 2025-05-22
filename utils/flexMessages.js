@@ -486,9 +486,10 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
     timeZone: 'Asia/Bangkok'
   });
 
-  // คำนวณเวลาที่เหลือ
-  const timeLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 60000));
-  const timeLeftText = timeLeft > 0 ? `⏰ เหลือ ${timeLeft} นาที` : '⚠️ หมดอายุแล้ว';
+  // คำนวณเวลาที่เหลือ (แก้ไขให้แม่นยำ)
+  const timeLeft = Math.max(0, expiresAt.getTime() - Date.now());
+  const timeLeftMinutes = Math.floor(timeLeft / 60000);
+  const timeLeftText = timeLeft > 0 ? `⏰ เหลือ ${timeLeftMinutes} นาที` : '⚠️ หมดอายุแล้ว';
 
   // ตรวจสอบและแก้ไข URL ให้เป็น /api/payment
   let correctedURL = qrCodeURL;
@@ -642,7 +643,7 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
                     type: "text",
                     text: expiresTime,
                     weight: "bold",
-                    color: timeLeft > 0 ? "#d89614" : "#a61d24",
+                    color: timeLeftMinutes > 5 ? "#d89614" : timeLeftMinutes > 0 ? "#d89614" : "#a61d24",
                     size: "sm",
                     flex: 3
                   }
@@ -671,7 +672,7 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
                     type: "text",
                     text: timeLeftText,
                     weight: "bold",
-                    color: timeLeft > 0 ? "#49aa19" : "#a61d24",
+                    color: timeLeftMinutes > 0 ? "#49aa19" : "#a61d24",
                     size: "sm",
                     flex: 3
                   }
