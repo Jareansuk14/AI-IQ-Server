@@ -700,7 +700,7 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
               },
               {
                 type: "text",
-                text: "• เปิดแอปธนาคารของคุณ\n• เลือก 'สแกน QR' หรือ 'พร้อมเพย์'\n• สแกน QR Code ด้านล่าง\n• ยืนยันการโอนเงิน",
+                text: "• กดปุ่มดู QR Code ชำระเงินด้านล่าง\n• เปิดแอปธนาคารของคุณ\n• สแกน QR Code เพื่อชำระเงิน\n• ยืนยันการโอนเงิน",
                 color: "#8c8c8c",
                 size: "xs",
                 wrap: true,
@@ -730,33 +730,14 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
             height: "md"
           },
           {
-            type: "box",
-            layout: "horizontal",
-            contents: [
-              {
-                type: "button",
-                style: "secondary",
-                action: {
-                  type: "postback",
-                  label: "🔄 ตรวจสอบสถานะ",
-                  data: `action=check_payment&payment_id=${paymentTransaction._id}`
-                },
-                flex: 3,
-                height: "sm"
-              },
-              {
-                type: "button",
-                style: "secondary",
-                action: {
-                  type: "postback",
-                  label: "❌ ยกเลิก",
-                  data: `action=cancel_payment&payment_id=${paymentTransaction._id}`
-                },
-                flex: 2,
-                height: "sm"
-              }
-            ],
-            spacing: "sm",
+            type: "button",
+            style: "secondary",
+            action: {
+              type: "postback",
+              label: "❌ ยกเลิก",
+              data: `action=cancel_payment&payment_id=${paymentTransaction._id}`
+            },
+            height: "sm",
             margin: "sm"
           }
         ],
