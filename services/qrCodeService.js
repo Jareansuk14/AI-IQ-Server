@@ -60,7 +60,7 @@ class QRCodeService {
 
   // สร้างลิงก์สำหรับแสดง QR Code (สำหรับเปิดในเบราว์เซอร์)
   generateQRDisplayLink(paymentId, baseURL = process.env.BASE_URL || 'http://localhost:3000') {
-    return `${baseURL}/payment/qr/${paymentId}`;
+    return `${baseURL}/api/payment/qr/${paymentId}`;
   }
 
   // ตรวจสอบความถูกต้องของเบอร์โทรศัพท์
