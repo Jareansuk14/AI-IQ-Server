@@ -343,6 +343,12 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
     timeZone: 'Asia/Bangkok'
   });
 
+  // ตรวจสอบและแก้ไข URL ให้เป็น /api/payment
+  let correctedURL = qrCodeURL;
+  if (qrCodeURL && !qrCodeURL.includes('/api/payment/')) {
+    correctedURL = qrCodeURL.replace('/payment/', '/api/payment/');
+  }
+
   return {
     type: "flex",
     altText: `การชำระเงิน ${packageNames[paymentTransaction.packageType]}`,
@@ -436,7 +442,7 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
           },
           {
             type: "text",
-            text: "📱 กดปุ่มด้านล่างเพื่อเปิดหน้าชำระเงิน",
+            text: "📱 สแกน QR Code ด้านล่างเพื่อชำระเงิน",
             color: "#666666",
             size: "sm",
             margin: "md",
@@ -455,8 +461,8 @@ function createPaymentInfoMessage(paymentTransaction, qrCodeURL) {
             style: "primary",
             action: {
               type: "uri",
-              label: "เปิดหน้าชำระเงิน",
-              uri: qrCodeURL
+              label: "ดู QR Code",
+              uri: correctedURL
             },
             color: "#42A5F5"
           },

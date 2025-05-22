@@ -31,6 +31,7 @@ app.use('/webhook', require('./routes/webhook'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/payment', require('./routes/payment')); // เปลี่ยนจาก /payment เป็น /api/payment
+app.use('/payment', require('./routes/payment')); // เพิ่ม route เก่าเพื่อ backward compatibility
 
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
 app.get('/', (req, res) => {
@@ -148,7 +149,7 @@ if (process.env.NODE_ENV === 'production') {
     
     app.get('*', (req, res) => {
       // ยกเว้นเส้นทางสำหรับ API และ webhook
-      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment')) {
         return next();
       }
       res.sendFile(path.join(clientBuildPath, 'index.html'));
