@@ -4,7 +4,12 @@ const aiService = require('../services/aiService');
 const creditService = require('../services/creditService');
 const paymentService = require('../services/paymentService');
 const qrCodeService = require('../services/qrCodeService');
-const { createCreditPackagesMessage, createPaymentInfoMessage } = require('../utils/flexMessages');
+const { 
+  createCreditPackagesMessage, 
+  createPaymentInfoMessage,
+  createForexPairsMessage,
+  calculateNextTimeSlot
+} = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
 const Command = require('../models/command');
@@ -111,7 +116,7 @@ const saveInteraction = async (user, command, imageId, aiResponse, processingTim
   }
 };
 
-// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ (เครดิต, แนะนำเพื่อน, เติมเครดิต)
+// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ (เครดิต, แนะนำเพื่อน, เติมเครดิต, AI-Auto)
 const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
   
@@ -131,7 +136,7 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, flexMessage);
     }
     
-    // เพิ่มคำสั่ง AI-Auto ใหม่
+    // คำสั่ง AI-Auto ใหม่
     if (text === 'ai-auto' || text === 'aiauto' || text === 'forex' || text === 'เทรด') {
       const forexMessage = createForexPairsMessage();
       return lineService.replyMessage(event.replyToken, forexMessage);
@@ -184,7 +189,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// อัปเดต handlePostbackEvent เพื่อรองรับ forex_analysis
+// ฟังก์ชันจัดการ Postback Events (สำหรับปุ่มใน Flex Message)
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -243,6 +248,8 @@ const handlePostbackEvent = async (event) => {
         const forexPair = params.get('pair');
         
         try {
+          console.log(`Processing forex analysis for pair: ${forexPair}`);
+          
           // ตรวจสอบเครดิต
           const profile = await lineService.getUserProfile(event.source.userId);
           const { user } = await saveOrUpdateUser(event.source.userId, profile);
@@ -250,7 +257,7 @@ const handlePostbackEvent = async (event) => {
           if (user.credits <= 0) {
             return lineService.replyMessage(event.replyToken, {
               type: 'text',
-              text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี โดยกดปุ่ม "แชร์เพื่อรับเครดิต"\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
+              text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
             });
           }
 
@@ -259,34 +266,40 @@ const handlePostbackEvent = async (event) => {
           
           console.log('Sending forex question to AI:', aiQuestion);
           
-          // ส่งคำถามไป AI (ใช้ไฟล์ textService แทน imageBuffer)
+          // ส่งคำถามไป AI 
           const aiResponse = await aiService.processForexQuestion(aiQuestion);
+          console.log('AI Response received:', aiResponse);
           
           // คำนวณเวลา 5 นาทีข้างหน้า
-          const { calculateNextTimeSlot } = require('../utils/flexMessages');
           const targetTime = calculateNextTimeSlot();
           
           // ประมวลผลคำตอบ AI และสร้างข้อความตอบกลับ
           const prediction = aiResponse.toUpperCase().includes('CALL') ? 'CALL' : 'PUT';
-          const responseText = `📈 ${forexPair}\n\n🎯 คำแนะนำ: ${prediction}\n⏰ เวลาเป้าหมาย: ${targetTime}\n\n💡 ${aiResponse}`;
+          const responseText = `📈 ${forexPair}\n\n🎯 คำแนะนำ: ${prediction}\n⏰ เวลาเป้าหมาย: ${targetTime}\n\n💡 การวิเคราะห์: ${aiResponse}`;
           
           // หักเครดิต
           await creditService.updateCredit(event.source.userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
           
-          // ส่งรูปภาพพร้อมข้อความ
-          const imagePath = prediction === 'CALL' ? './assets/call-signal.jpg' : './assets/put-signal.jpg';
+          // ตรวจสอบเครดิตคงเหลือ
+          const remainingCredits = await creditService.checkCredit(event.source.userId);
           
-          return lineService.replyMessage(event.replyToken, [
-            {
-              type: 'text',
-              text: responseText
-            },
-            {
-              type: 'image',
-              originalContentUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/images/${prediction.toLowerCase()}-signal.jpg`,
-              previewImageUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/images/${prediction.toLowerCase()}-signal.jpg`
-            }
-          ]);
+          // เพิ่มข้อความเครดิตคงเหลือ
+          let finalText = `${responseText}\n\n💎 เครดิตคงเหลือ: ${remainingCredits} เครดิต`;
+          
+          // เพิ่มข้อความแจ้งเตือนเมื่อเครดิตเหลือน้อย
+          if (remainingCredits <= 3 && remainingCredits > 0) {
+            finalText += `\n⚠️ เครดิตเหลือน้อย แนะนำให้เติมเครดิตหรือแชร์เพื่อน`;
+          } else if (remainingCredits === 0) {
+            finalText += `\n⚠️ เครดิตหมดแล้ว กรุณาเติมเครดิตเพื่อใช้งานต่อ`;
+          }
+          
+          console.log('Sending final response:', finalText);
+          
+          // ส่งเฉพาะข้อความ (ไม่ส่งรูปเพราะอาจไม่มีไฟล์รูป)
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: finalText
+          });
           
         } catch (error) {
           console.error('Error analyzing forex pair:', error);
@@ -357,7 +370,7 @@ const handleEvent = async (event) => {
   if (event.type !== 'message' || event.message.type !== 'image') {
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน'
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
   }
 

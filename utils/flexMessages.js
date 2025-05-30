@@ -938,7 +938,7 @@ function createPaymentSuccessMessage(paymentData, totalCredits) {
   };
 }
 
-// เพิ่มฟังก์ชันสร้างเมนูคู่เงิน AI-Auto
+// ฟังก์ชันสร้างเมนูคู่เงิน AI-Auto
 function createForexPairsMessage() {
   return {
     type: "flex",

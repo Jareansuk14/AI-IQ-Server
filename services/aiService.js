@@ -1,4 +1,4 @@
-// services/aiService.js
+//AI-Server/services/aiService.js
 const OpenAI = require('openai');
 require('dotenv').config();
 
@@ -101,56 +101,75 @@ class AiService {
     }
   }
 
-  // เพิ่มฟังก์ชันใหม่สำหรับการวิเคราะห์ Forex
-async processForexQuestion(question) {
-  try {
-    console.log('Processing forex question with OpenAI API...');
-    console.log('Question:', question);
-    
-    const response = await this.openai.chat.completions.create({
-      model: "gpt-4-turbo",
-      messages: [
-        {
-          role: "system",
-          content: "คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์ Forex และการเทรด Binary Options โปรดตอบแค่ CALL หรือ PUT เท่านั้น โดยใช้ข้อมูลล่าสุดจากตลาด"
-        },
-        {
-          role: "user", 
-          content: question
-        }
-      ],
-      max_tokens: 50,
-      temperature: 0.7
-    });
-    
-    console.log('Received forex analysis response from OpenAI API');
-    
-    if (response.choices && response.choices.length > 0) {
-      const aiAnswer = response.choices[0].message.content.trim();
-      console.log('AI Response:', aiAnswer);
+  // ฟังก์ชันใหม่สำหรับการวิเคราะห์ Forex
+  async processForexQuestion(question) {
+    try {
+      console.log('Processing forex question with OpenAI API...');
+      console.log('Question:', question);
       
-      // ตรวจสอบและทำความสะอาดคำตอบ
-      if (aiAnswer.toUpperCase().includes('CALL')) {
-        return 'CALL';
-      } else if (aiAnswer.toUpperCase().includes('PUT')) {
-        return 'PUT';
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "คุณเป็นผู้เชี่ยวชาญด้านการวิเคราะห์ Forex และการเทรด Binary Options โปรดตอบแค่ CALL หรือ PUT เท่านั้น โดยใช้ข้อมูลล่าสุดจากตลาด"
+          },
+          {
+            role: "user", 
+            content: question
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.7
+      });
+      
+      console.log('Received forex analysis response from OpenAI API');
+      
+      if (response.choices && response.choices.length > 0) {
+        const aiAnswer = response.choices[0].message.content.trim();
+        console.log('AI Response:', aiAnswer);
+        
+        // ตรวจสอบและทำความสะอาดคำตอบ
+        if (aiAnswer.toUpperCase().includes('CALL')) {
+          return 'CALL';
+        } else if (aiAnswer.toUpperCase().includes('PUT')) {
+          return 'PUT';
+        } else {
+          // หากไม่ชัดเจน ให้สุ่ม (fallback)
+          const fallbackPrediction = Math.random() > 0.5 ? 'CALL' : 'PUT';
+          console.log('AI response unclear, using fallback:', fallbackPrediction);
+          return fallbackPrediction;
+        }
       } else {
-        // หากไม่ชัดเจน ให้สุ่ม (fallback)
-        return Math.random() > 0.5 ? 'CALL' : 'PUT';
+        throw new Error('ไม่พบเนื้อหาในการตอบกลับจาก API');
       }
-    } else {
-      throw new Error('ไม่พบเนื้อหาในการตอบกลับจาก API');
+    } catch (error) {
+      console.error('Forex analysis error:', error);
+      
+      // จัดการข้อผิดพลาดเฉพาะของ OpenAI API
+      if (error.status === 401) {
+        console.error('OpenAI API key error for forex analysis');
+        throw new Error('รหัส API ไม่ถูกต้องสำหรับการวิเคราะห์ Forex');
+      } else if (error.status === 429) {
+        console.error('OpenAI API rate limit exceeded for forex analysis');
+        // Fallback - สุ่มคำตอบเมื่อ rate limit
+        const fallbackPrediction = Math.random() > 0.5 ? 'CALL' : 'PUT';
+        console.log('Rate limit exceeded, using fallback prediction:', fallbackPrediction);
+        return fallbackPrediction;
+      } else if (error.status === 400) {
+        console.error('Bad request to OpenAI API for forex analysis:', error.message);
+        // Fallback - สุ่มคำตอบเมื่อ bad request
+        const fallbackPrediction = Math.random() > 0.5 ? 'CALL' : 'PUT';
+        console.log('Bad request, using fallback prediction:', fallbackPrediction);
+        return fallbackPrediction;
+      }
+      
+      // Fallback ทั่วไป - สุ่มคำตอบหากเกิดข้อผิดพลาดใดๆ
+      const fallbackPrediction = Math.random() > 0.5 ? 'CALL' : 'PUT';
+      console.log('General error, using fallback prediction:', fallbackPrediction);
+      return fallbackPrediction;
     }
-  } catch (error) {
-    console.error('Forex analysis error:', error);
-    
-    // Fallback - สุ่มคำตอบหากเกิดข้อผิดพลาด
-    const fallbackPrediction = Math.random() > 0.5 ? 'CALL' : 'PUT';
-    console.log('Using fallback prediction:', fallbackPrediction);
-    return fallbackPrediction;
   }
-}
-
 }
 
 module.exports = new AiService();
