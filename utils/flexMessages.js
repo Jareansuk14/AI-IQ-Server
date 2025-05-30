@@ -1016,7 +1016,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=EUR/USD"
                 },
                 color: "#177ddc"
@@ -1098,7 +1098,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=GBP/USD"
                 },
                 color: "#177ddc"
@@ -1180,7 +1180,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=USD/JPY"
                 },
                 color: "#177ddc"
@@ -1262,7 +1262,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=USD/CHF"
                 },
                 color: "#177ddc"
@@ -1344,7 +1344,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=AUD/USD"
                 },
                 color: "#49aa19"
@@ -1426,7 +1426,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=NZD/USD"
                 },
                 color: "#49aa19"
@@ -1508,7 +1508,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=USD/CAD"
                 },
                 color: "#49aa19"
@@ -1590,7 +1590,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=EUR/GBP"
                 },
                 color: "#49aa19"
@@ -1672,7 +1672,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=EUR/JPY"
                 },
                 color: "#1890ff"
@@ -1754,7 +1754,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=GBP/JPY"
                 },
                 color: "#1890ff"
@@ -1836,7 +1836,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=BTC/USD"
                 },
                 color: "#d89614"
@@ -1918,7 +1918,7 @@ function createForexPairsMessage() {
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "📊 วิเคราะห์",
+                  label: "🦾 Auto ",
                   data: "action=forex_analysis&pair=GOLD"
                 },
                 color: "#722ed1"
