@@ -27,86 +27,19 @@ app.use(cors({
   credentials: true
 }));
 
+// Serve static images for CALL/PUT signals (เพิ่มสำหรับ AI-Auto)
+app.use('/images', express.static(path.join(__dirname, 'assets')));
+
 // เส้นทาง
 app.use('/webhook', require('./routes/webhook'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/payment', require('./routes/payment')); // เปลี่ยนจาก /payment เป็น /api/payment
 app.use('/payment', require('./routes/payment')); // เพิ่ม route เก่าเพื่อ backward compatibility
-app.use('/images', express.static(path.join(__dirname, 'assets')));
 
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
 app.get('/', (req, res) => {
   res.send('LINE Bot server is running!');
-});
-
-// API endpoint สำหรับทดสอบ AI-Auto
-app.get('/api/test/forex', async (req, res) => {
-  try {
-    const { pair } = req.query;
-    if (!pair) {
-      return res.status(400).json({ error: 'Please provide pair parameter' });
-    }
-    
-    const aiService = require('./services/aiService');
-    const question = `ในคู่เงิน ${pair} ตอนนี้ควร CALL หรือ PUT ไปเช็คกราฟจากเว็บต่างๆให้หน่อย ตอบมาสั้นๆแค่ CALL หรือ PUT`;
-    const result = await aiService.processForexQuestion(question);
-    
-    const { calculateNextTimeSlot } = require('./utils/flexMessages');
-    const targetTime = calculateNextTimeSlot();
-    
-    res.json({
-      pair,
-      prediction: result,
-      targetTime,
-      question
-    });
-  } catch (error) {
-    console.error('Test forex API error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// เพิ่มเส้นทางสำหรับสร้างโฟลเดอร์ assets และรูปภาพตัวอย่าง
-app.get('/api/setup/images', (req, res) => {
-  try {
-    const assetsPath = path.join(__dirname, 'assets');
-    
-    // สร้างโฟลเดอร์ assets หากไม่มี
-    if (!fs.existsSync(assetsPath)) {
-      fs.mkdirSync(assetsPath, { recursive: true });
-      console.log('Created assets directory');
-    }
-    
-    // สร้างไฟล์รูปภาพตัวอย่าง (placeholder)
-    const callImagePath = path.join(assetsPath, 'call-signal.jpg');
-    const putImagePath = path.join(assetsPath, 'put-signal.jpg');
-    
-    if (!fs.existsSync(callImagePath)) {
-      // สร้างไฟล์ว่าง - ในการใช้งานจริงต้องเพิ่มรูปภาพจริง
-      fs.writeFileSync(callImagePath, '');
-      console.log('Created call-signal.jpg placeholder');
-    }
-    
-    if (!fs.existsSync(putImagePath)) {
-      // สร้างไฟล์ว่าง - ในการใช้งานจริงต้องเพิ่มรูปภาพจริง  
-      fs.writeFileSync(putImagePath, '');
-      console.log('Created put-signal.jpg placeholder');
-    }
-    
-    res.json({
-      message: 'Assets setup completed',
-      paths: {
-        assetsDirectory: assetsPath,
-        callImage: callImagePath,
-        putImage: putImagePath
-      },
-      note: 'Please replace placeholder files with actual CALL and PUT signal images'
-    });
-  } catch (error) {
-    console.error('Setup images error:', error);
-    res.status(500).json({ error: error.message });
-  }
 });
 
 // เพิ่มเส้นทางสำหรับตรวจสอบสถานะระบบ
@@ -210,6 +143,130 @@ app.get('/api/emails/recent', async (req, res) => {
   }
 });
 
+// === เพิ่ม API endpoints สำหรับ AI-Auto ===
+
+// API endpoint สำหรับทดสอบ AI-Auto
+app.get('/api/test/forex', async (req, res) => {
+  try {
+    const { pair } = req.query;
+    if (!pair) {
+      return res.status(400).json({ error: 'Please provide pair parameter' });
+    }
+    
+    const aiService = require('./services/aiService');
+    const question = `ในคู่เงิน ${pair} ตอนนี้ควร CALL หรือ PUT ไปเช็คกราฟจากเว็บต่างๆให้หน่อย ตอบมาสั้นๆแค่ CALL หรือ PUT`;
+    const result = await aiService.processForexQuestion(question);
+    
+    const { calculateNextTimeSlot } = require('./utils/flexMessages');
+    const targetTime = calculateNextTimeSlot();
+    
+    res.json({
+      pair: `${pair} (M5)`,
+      prediction: result,
+      targetTime,
+      question,
+      imageUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/images/${result.toLowerCase()}-signal.jpg`
+    });
+  } catch (error) {
+    console.error('Test forex API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint สำหรับตรวจสอบรูปภาพ
+app.get('/api/images/check', (req, res) => {
+  try {
+    const assetsPath = path.join(__dirname, 'assets');
+    const callImagePath = path.join(assetsPath, 'call-signal.jpg');
+    const putImagePath = path.join(assetsPath, 'put-signal.jpg');
+    
+    const callExists = fs.existsSync(callImagePath);
+    const putExists = fs.existsSync(putImagePath);
+    
+    res.json({
+      assetsPath,
+      images: {
+        call: {
+          path: callImagePath,
+          exists: callExists,
+          url: callExists ? `${process.env.BASE_URL || 'http://localhost:3000'}/images/call-signal.jpg` : null
+        },
+        put: {
+          path: putImagePath,
+          exists: putExists,
+          url: putExists ? `${process.env.BASE_URL || 'http://localhost:3000'}/images/put-signal.jpg` : null
+        }
+      },
+      ready: callExists && putExists
+    });
+  } catch (error) {
+    console.error('Image check error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint สำหรับสร้างโฟลเดอร์ assets (หากยังไม่มี)
+app.get('/api/setup/assets', (req, res) => {
+  try {
+    const assetsPath = path.join(__dirname, 'assets');
+    
+    // สร้างโฟลเดอร์ assets หากไม่มี
+    if (!fs.existsSync(assetsPath)) {
+      fs.mkdirSync(assetsPath, { recursive: true });
+      console.log('Created assets directory');
+    }
+    
+    res.json({
+      message: 'Assets directory ready',
+      path: assetsPath,
+      note: 'Please upload call-signal.jpg and put-signal.jpg to this directory'
+    });
+  } catch (error) {
+    console.error('Setup assets error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับดูรายการคู่เงินที่รองรับ
+app.get('/api/forex/pairs', (req, res) => {
+  try {
+    const forexPairs = [
+      // Major Pairs
+      { pair: 'EUR/USD', category: 'Major', flag: '🇪🇺🇺🇸' },
+      { pair: 'GBP/USD', category: 'Major', flag: '🇬🇧🇺🇸' },
+      { pair: 'USD/JPY', category: 'Major', flag: '🇺🇸🇯🇵' },
+      { pair: 'USD/CHF', category: 'Major', flag: '🇺🇸🇨🇭' },
+      
+      // Cross Pairs
+      { pair: 'AUD/USD', category: 'Cross', flag: '🇦🇺🇺🇸' },
+      { pair: 'NZD/USD', category: 'Cross', flag: '🇳🇿🇺🇸' },
+      { pair: 'USD/CAD', category: 'Cross', flag: '🇺🇸🇨🇦' },
+      { pair: 'EUR/GBP', category: 'Cross', flag: '🇪🇺🇬🇧' },
+      
+      // Special Assets
+      { pair: 'EUR/JPY', category: 'Special', flag: '🇪🇺🇯🇵' },
+      { pair: 'GBP/JPY', category: 'Special', flag: '🇬🇧🇯🇵' },
+      { pair: 'BTC/USD', category: 'Crypto', flag: '₿' },
+      { pair: 'GOLD', category: 'Commodity', flag: '🥇' }
+    ];
+    
+    res.json({
+      totalPairs: forexPairs.length,
+      pairs: forexPairs,
+      categories: {
+        Major: forexPairs.filter(p => p.category === 'Major').length,
+        Cross: forexPairs.filter(p => p.category === 'Cross').length,
+        Special: forexPairs.filter(p => p.category === 'Special').length,
+        Crypto: forexPairs.filter(p => p.category === 'Crypto').length,
+        Commodity: forexPairs.filter(p => p.category === 'Commodity').length
+      }
+    });
+  } catch (error) {
+    console.error('Error getting forex pairs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Serve static assets for the admin dashboard
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.resolve(__dirname, 'client', 'build');
@@ -220,7 +277,7 @@ if (process.env.NODE_ENV === 'production') {
     
     app.get('*', (req, res) => {
       // ยกเว้นเส้นทางสำหรับ API และ webhook
-      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment') || req.path.startsWith('/images')) {
         return next();
       }
       res.sendFile(path.join(clientBuildPath, 'index.html'));
@@ -275,6 +332,8 @@ connectDB()
     // เริ่มเซิร์ฟเวอร์ไม่ว่าผลลัพธ์ของการเชื่อมต่อฐานข้อมูลจะเป็นอย่างไร
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
+      console.log(`AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
+      console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
     });
   });
 

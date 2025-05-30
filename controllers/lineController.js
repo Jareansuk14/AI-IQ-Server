@@ -243,7 +243,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // เพิ่ม case ใหม่สำหรับการวิเคราะห์ Forex
+      // อัปเดต case สำหรับการวิเคราะห์ Forex
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -273,9 +273,8 @@ const handlePostbackEvent = async (event) => {
           // คำนวณเวลา 5 นาทีข้างหน้า
           const targetTime = calculateNextTimeSlot();
           
-          // ประมวลผลคำตอบ AI และสร้างข้อความตอบกลับ
+          // ประมวลผลคำตอบ AI
           const prediction = aiResponse.toUpperCase().includes('CALL') ? 'CALL' : 'PUT';
-          const responseText = `📈 ${forexPair}\n\n🎯 คำแนะนำ: ${prediction}\n⏰ เวลาเป้าหมาย: ${targetTime}\n\n💡 การวิเคราะห์: ${aiResponse}`;
           
           // หักเครดิต
           await creditService.updateCredit(event.source.userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
@@ -283,23 +282,31 @@ const handlePostbackEvent = async (event) => {
           // ตรวจสอบเครดิตคงเหลือ
           const remainingCredits = await creditService.checkCredit(event.source.userId);
           
-          // เพิ่มข้อความเครดิตคงเหลือ
-          let finalText = `${responseText}\n\n💎 เครดิตคงเหลือ: ${remainingCredits} เครดิต`;
+          // สร้างข้อความตามรูปแบบที่ต้องการ
+          const formattedPair = `${forexPair} (M5)`;
+          const responseText = `${formattedPair}\nผลการวิเคราะห์: ${prediction}\nเข้าเทรดตอน: ${targetTime}\nเครดิตคงเหลือ: ${remainingCredits} เครดิต`;
           
-          // เพิ่มข้อความแจ้งเตือนเมื่อเครดิตเหลือน้อย
-          if (remainingCredits <= 3 && remainingCredits > 0) {
-            finalText += `\n⚠️ เครดิตเหลือน้อย แนะนำให้เติมเครดิตหรือแชร์เพื่อน`;
-          } else if (remainingCredits === 0) {
-            finalText += `\n⚠️ เครดิตหมดแล้ว กรุณาเติมเครดิตเพื่อใช้งานต่อ`;
-          }
+          console.log('Sending response with image and text');
           
-          console.log('Sending final response:', finalText);
+          // URL ของรูปภาพตามการทำนาย
+          const baseURL = process.env.BASE_URL || 'http://localhost:3000';
+          const imageFileName = prediction === 'CALL' ? 'call-signal.jpg' : 'put-signal.jpg';
+          const imageUrl = `${baseURL}/images/${imageFileName}`;
           
-          // ส่งเฉพาะข้อความ (ไม่ส่งรูปเพราะอาจไม่มีไฟล์รูป)
-          return lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: finalText
-          });
+          // ส่งทั้งรูปภาพและข้อความ
+          return lineService.replyMessage(event.replyToken, [
+            // ส่งรูปภาพก่อน
+            {
+              type: 'image',
+              originalContentUrl: imageUrl,
+              previewImageUrl: imageUrl
+            },
+            // ตามด้วยข้อความ
+            {
+              type: 'text',
+              text: responseText
+            }
+          ]);
           
         } catch (error) {
           console.error('Error analyzing forex pair:', error);

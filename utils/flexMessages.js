@@ -946,7 +946,7 @@ function createForexPairsMessage() {
     contents: {
       type: "carousel",
       contents: [
-        // การ์ดที่ 1 - Major Pairs (1)
+        // EUR/USD - Major Pair
         {
           type: "bubble",
           size: "micro",
@@ -956,71 +956,79 @@ function createForexPairsMessage() {
             contents: [
               {
                 type: "text",
-                text: "🔥 MAJOR PAIRS",
+                text: "🔥 MAJOR",
                 weight: "bold",
                 color: "#ffffff",
-                size: "sm",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "EUR/USD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
                 align: "center"
               }
             ],
-            backgroundColor: "#ff6b35",
-            paddingAll: "15px"
+            backgroundColor: "#177ddc",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
           },
           body: {
             type: "box",
             layout: "vertical",
             contents: [
               {
+                type: "text",
+                text: "🇪🇺🇺🇸",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "Euro vs US Dollar",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
                 type: "button",
-                style: "link",
+                style: "primary",
                 height: "sm",
                 action: {
                   type: "postback",
-                  label: "🇺🇸🇪🇺 EUR/USD",
+                  label: "📊 วิเคราะห์",
                   data: "action=forex_analysis&pair=EUR/USD"
                 },
-                color: "#495057"
-              },
-              {
-                type: "button",
-                style: "link", 
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇺🇸🇬🇧 GBP/USD",
-                  data: "action=forex_analysis&pair=GBP/USD"
-                },
-                color: "#495057"
-              },
-              {
-                type: "button",
-                style: "link",
-                height: "sm", 
-                action: {
-                  type: "postback",
-                  label: "🇺🇸🇯🇵 USD/JPY",
-                  data: "action=forex_analysis&pair=USD/JPY"
-                },
-                color: "#495057"
-              },
-              {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback", 
-                  label: "🇺🇸🇨🇭 USD/CHF",
-                  data: "action=forex_analysis&pair=USD/CHF"
-                },
-                color: "#495057"
+                color: "#177ddc"
               }
             ],
-            spacing: "xs",
-            paddingAll: "15px",
-            backgroundColor: "#f8f9fa"
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
           }
         },
-        // การ์ดที่ 2 - Major Pairs (2)
+
+        // GBP/USD - Major Pair
         {
           type: "bubble",
           size: "micro",
@@ -1030,71 +1038,571 @@ function createForexPairsMessage() {
             contents: [
               {
                 type: "text",
-                text: "⭐ CROSS PAIRS",
+                text: "🔥 MAJOR",
                 weight: "bold",
                 color: "#ffffff",
-                size: "sm",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "GBP/USD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
                 align: "center"
               }
             ],
-            backgroundColor: "#20bf6b",
-            paddingAll: "15px"
+            backgroundColor: "#177ddc",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
           },
           body: {
             type: "box",
             layout: "vertical",
             contents: [
               {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇦🇺🇺🇸 AUD/USD",
-                  data: "action=forex_analysis&pair=AUD/USD"
-                },
-                color: "#495057"
+                type: "text",
+                text: "🇬🇧🇺🇸",
+                size: "xxl",
+                align: "center",
+                margin: "md"
               },
               {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇳🇿🇺🇸 NZD/USD",
-                  data: "action=forex_analysis&pair=NZD/USD"
-                },
-                color: "#495057"
+                type: "separator",
+                margin: "md",
+                color: "#303030"
               },
               {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇺🇸🇨🇦 USD/CAD",
-                  data: "action=forex_analysis&pair=USD/CAD"
-                },
-                color: "#495057"
-              },
-              {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇪🇺🇬🇧 EUR/GBP",
-                  data: "action=forex_analysis&pair=EUR/GBP"
-                },
-                color: "#495057"
+                type: "text",
+                text: "British Pound vs US Dollar",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
               }
             ],
             spacing: "xs",
             paddingAll: "15px",
-            backgroundColor: "#f8f9fa"
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=GBP/USD"
+                },
+                color: "#177ddc"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
           }
         },
-        // การ์ดที่ 3 - Special Assets
+
+        // USD/JPY - Major Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🔥 MAJOR",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "USD/JPY",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#177ddc",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇺🇸🇯🇵",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "US Dollar vs Japanese Yen",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=USD/JPY"
+                },
+                color: "#177ddc"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // USD/CHF - Major Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🔥 MAJOR",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "USD/CHF",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#177ddc",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇺🇸🇨🇭",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "US Dollar vs Swiss Franc",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=USD/CHF"
+                },
+                color: "#177ddc"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // AUD/USD - Cross Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "⭐ CROSS",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "AUD/USD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#49aa19",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇦🇺🇺🇸",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "Australian Dollar vs US Dollar",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=AUD/USD"
+                },
+                color: "#49aa19"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // NZD/USD - Cross Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "⭐ CROSS",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "NZD/USD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#49aa19",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇳🇿🇺🇸",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "New Zealand Dollar vs US Dollar",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=NZD/USD"
+                },
+                color: "#49aa19"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // USD/CAD - Cross Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "⭐ CROSS",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "USD/CAD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#49aa19",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇺🇸🇨🇦",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "US Dollar vs Canadian Dollar",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=USD/CAD"
+                },
+                color: "#49aa19"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // EUR/GBP - Cross Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "⭐ CROSS",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "EUR/GBP",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#49aa19",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇪🇺🇬🇧",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "Euro vs British Pound",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=EUR/GBP"
+                },
+                color: "#49aa19"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // EUR/JPY - Special Pair
         {
           type: "bubble",
           size: "micro",
@@ -1107,65 +1615,318 @@ function createForexPairsMessage() {
                 text: "💎 SPECIAL",
                 weight: "bold",
                 color: "#ffffff",
-                size: "sm",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "EUR/JPY",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
                 align: "center"
               }
             ],
-            backgroundColor: "#8e44ad",
-            paddingAll: "15px"
+            backgroundColor: "#1890ff",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
           },
           body: {
             type: "box",
             layout: "vertical",
             contents: [
               {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇪🇺🇯🇵 EUR/JPY",
-                  data: "action=forex_analysis&pair=EUR/JPY"
-                },
-                color: "#495057"
+                type: "text",
+                text: "🇪🇺🇯🇵",
+                size: "xxl",
+                align: "center",
+                margin: "md"
               },
               {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🇬🇧🇯🇵 GBP/JPY",
-                  data: "action=forex_analysis&pair=GBP/JPY"
-                },
-                color: "#495057"
+                type: "separator",
+                margin: "md",
+                color: "#303030"
               },
               {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "₿ BTC/USD",
-                  data: "action=forex_analysis&pair=BTC/USD"
-                },
-                color: "#495057"
-              },
-              {
-                type: "button",
-                style: "link",
-                height: "sm",
-                action: {
-                  type: "postback",
-                  label: "🥇 GOLD",
-                  data: "action=forex_analysis&pair=GOLD"
-                },
-                color: "#495057"
+                type: "text",
+                text: "Euro vs Japanese Yen",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
               }
             ],
             spacing: "xs",
             paddingAll: "15px",
-            backgroundColor: "#f8f9fa"
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=EUR/JPY"
+                },
+                color: "#1890ff"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // GBP/JPY - Special Pair
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "💎 SPECIAL",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "GBP/JPY",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#1890ff",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🇬🇧🇯🇵",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "British Pound vs Japanese Yen",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=GBP/JPY"
+                },
+                color: "#1890ff"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // BTC/USD - Crypto
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🔥 CRYPTO",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "BTC/USD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#d89614",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "₿💰",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "Bitcoin vs US Dollar",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=BTC/USD"
+                },
+                color: "#d89614"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
+          }
+        },
+
+        // GOLD - Commodity
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "👑 PREMIUM",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xs",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "GOLD",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#722ed1",
+            paddingTop: "15px",
+            paddingAll: "12px",
+            paddingBottom: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🥇✨",
+                size: "xxl",
+                align: "center",
+                margin: "md"
+              },
+              {
+                type: "separator",
+                margin: "md",
+                color: "#303030"
+              },
+              {
+                type: "text",
+                text: "Gold Commodity Trading",
+                size: "xs",
+                color: "#8c8c8c",
+                wrap: true,
+                align: "center",
+                margin: "md"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "📊 วิเคราะห์",
+                  data: "action=forex_analysis&pair=GOLD"
+                },
+                color: "#722ed1"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "12px",
+            backgroundColor: "#1f1f1f"
           }
         }
       ]
