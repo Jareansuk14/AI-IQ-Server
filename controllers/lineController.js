@@ -190,6 +190,9 @@ const handleSpecialCommand = async (event) => {
 };
 
 // ฟังก์ชันจัดการ Postback Events (สำหรับปุ่มใน Flex Message)
+//AI-Server/controllers/lineController.js - อัปเดตฟังก์ชัน handlePostbackEvent
+
+// ฟังก์ชันจัดการ Postback Events (สำหรับปุ่มใน Flex Message)
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -243,19 +246,26 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // อัปเดต case สำหรับการวิเคราะห์ Forex
+      // อัปเดต case สำหรับการวิเคราะห์ Forex พร้อมข้อความกำลังประมวลผล
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
         try {
           console.log(`Processing forex analysis for pair: ${forexPair}`);
           
+          // ส่งข้อความ "กำลังประมวลผล..." ทันทีหลังจากกดการ์ด
+          await lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `🔄 กำลังประมวลผล ${forexPair}...\n\n📊 AI กำลังวิเคราะห์ข้อมูลตลาด\n⏳ กรุณารอสักครู่`
+          });
+          
           // ตรวจสอบเครดิต
           const profile = await lineService.getUserProfile(event.source.userId);
           const { user } = await saveOrUpdateUser(event.source.userId, profile);
           
           if (user.credits <= 0) {
-            return lineService.replyMessage(event.replyToken, {
+            // ใช้ pushMessage เพราะ replyToken ใช้ไปแล้ว
+            return lineService.pushMessage(event.source.userId, {
               type: 'text',
               text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
             });
@@ -293,8 +303,8 @@ const handlePostbackEvent = async (event) => {
           const imageFileName = prediction === 'CALL' ? 'call-signal.jpg' : 'put-signal.jpg';
           const imageUrl = `${baseURL}/images/${imageFileName}`;
           
-          // ส่งทั้งรูปภาพและข้อความ
-          return lineService.replyMessage(event.replyToken, [
+          // ส่งผลลัพธ์ผ่าน pushMessage (เพราะ replyToken ใช้ไปแล้ว)
+          return lineService.pushMessage(event.source.userId, [
             // ส่งรูปภาพก่อน
             {
               type: 'image',
@@ -310,7 +320,9 @@ const handlePostbackEvent = async (event) => {
           
         } catch (error) {
           console.error('Error analyzing forex pair:', error);
-          return lineService.replyMessage(event.replyToken, {
+          
+          // ส่งข้อความแสดงข้อผิดพลาดผ่าน pushMessage
+          return lineService.pushMessage(event.source.userId, {
             type: 'text',
             text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์คู่เงิน\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
           });
