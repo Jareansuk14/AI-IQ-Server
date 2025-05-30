@@ -1,3 +1,4 @@
+//AI-Server/server.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -32,10 +33,80 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/payment', require('./routes/payment')); // เปลี่ยนจาก /payment เป็น /api/payment
 app.use('/payment', require('./routes/payment')); // เพิ่ม route เก่าเพื่อ backward compatibility
+app.use('/images', express.static(path.join(__dirname, 'assets')));
 
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
 app.get('/', (req, res) => {
   res.send('LINE Bot server is running!');
+});
+
+// API endpoint สำหรับทดสอบ AI-Auto
+app.get('/api/test/forex', async (req, res) => {
+  try {
+    const { pair } = req.query;
+    if (!pair) {
+      return res.status(400).json({ error: 'Please provide pair parameter' });
+    }
+    
+    const aiService = require('./services/aiService');
+    const question = `ในคู่เงิน ${pair} ตอนนี้ควร CALL หรือ PUT ไปเช็คกราฟจากเว็บต่างๆให้หน่อย ตอบมาสั้นๆแค่ CALL หรือ PUT`;
+    const result = await aiService.processForexQuestion(question);
+    
+    const { calculateNextTimeSlot } = require('./utils/flexMessages');
+    const targetTime = calculateNextTimeSlot();
+    
+    res.json({
+      pair,
+      prediction: result,
+      targetTime,
+      question
+    });
+  } catch (error) {
+    console.error('Test forex API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// เพิ่มเส้นทางสำหรับสร้างโฟลเดอร์ assets และรูปภาพตัวอย่าง
+app.get('/api/setup/images', (req, res) => {
+  try {
+    const assetsPath = path.join(__dirname, 'assets');
+    
+    // สร้างโฟลเดอร์ assets หากไม่มี
+    if (!fs.existsSync(assetsPath)) {
+      fs.mkdirSync(assetsPath, { recursive: true });
+      console.log('Created assets directory');
+    }
+    
+    // สร้างไฟล์รูปภาพตัวอย่าง (placeholder)
+    const callImagePath = path.join(assetsPath, 'call-signal.jpg');
+    const putImagePath = path.join(assetsPath, 'put-signal.jpg');
+    
+    if (!fs.existsSync(callImagePath)) {
+      // สร้างไฟล์ว่าง - ในการใช้งานจริงต้องเพิ่มรูปภาพจริง
+      fs.writeFileSync(callImagePath, '');
+      console.log('Created call-signal.jpg placeholder');
+    }
+    
+    if (!fs.existsSync(putImagePath)) {
+      // สร้างไฟล์ว่าง - ในการใช้งานจริงต้องเพิ่มรูปภาพจริง  
+      fs.writeFileSync(putImagePath, '');
+      console.log('Created put-signal.jpg placeholder');
+    }
+    
+    res.json({
+      message: 'Assets setup completed',
+      paths: {
+        assetsDirectory: assetsPath,
+        callImage: callImagePath,
+        putImage: putImagePath
+      },
+      note: 'Please replace placeholder files with actual CALL and PUT signal images'
+    });
+  } catch (error) {
+    console.error('Setup images error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // เพิ่มเส้นทางสำหรับตรวจสอบสถานะระบบ

@@ -1,3 +1,4 @@
+//AI-Server/controllers/lineController.js
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
 const creditService = require('../services/creditService');
@@ -130,6 +131,12 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, flexMessage);
     }
     
+    // เพิ่มคำสั่ง AI-Auto ใหม่
+    if (text === 'ai-auto' || text === 'aiauto' || text === 'forex' || text === 'เทรด') {
+      const forexMessage = createForexPairsMessage();
+      return lineService.replyMessage(event.replyToken, forexMessage);
+    }
+    
     // คำสั่งดูรหัสแนะนำ
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
       const referralCode = await creditService.getReferralCode(event.source.userId);
@@ -177,7 +184,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// ฟังก์ชันจัดการ Postback Events (สำหรับปุ่มใน Flex Message)
+// อัปเดต handlePostbackEvent เพื่อรองรับ forex_analysis
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -228,6 +235,64 @@ const handlePostbackEvent = async (event) => {
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
             text: `❌ ไม่สามารถยกเลิกรายการได้: ${error.message}`
+          });
+        }
+
+      // เพิ่ม case ใหม่สำหรับการวิเคราะห์ Forex
+      case 'forex_analysis':
+        const forexPair = params.get('pair');
+        
+        try {
+          // ตรวจสอบเครดิต
+          const profile = await lineService.getUserProfile(event.source.userId);
+          const { user } = await saveOrUpdateUser(event.source.userId, profile);
+          
+          if (user.credits <= 0) {
+            return lineService.replyMessage(event.replyToken, {
+              type: 'text',
+              text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี โดยกดปุ่ม "แชร์เพื่อรับเครดิต"\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
+            });
+          }
+
+          // สร้างคำถามสำหรับ AI
+          const aiQuestion = `ในคู่เงิน ${forexPair} ตอนนี้ควร CALL หรือ PUT ไปเช็คกราฟจากเว็บต่างๆให้หน่อย ตอบมาสั้นๆแค่ CALL หรือ PUT`;
+          
+          console.log('Sending forex question to AI:', aiQuestion);
+          
+          // ส่งคำถามไป AI (ใช้ไฟล์ textService แทน imageBuffer)
+          const aiResponse = await aiService.processForexQuestion(aiQuestion);
+          
+          // คำนวณเวลา 5 นาทีข้างหน้า
+          const { calculateNextTimeSlot } = require('../utils/flexMessages');
+          const targetTime = calculateNextTimeSlot();
+          
+          // ประมวลผลคำตอบ AI และสร้างข้อความตอบกลับ
+          const prediction = aiResponse.toUpperCase().includes('CALL') ? 'CALL' : 'PUT';
+          const responseText = `📈 ${forexPair}\n\n🎯 คำแนะนำ: ${prediction}\n⏰ เวลาเป้าหมาย: ${targetTime}\n\n💡 ${aiResponse}`;
+          
+          // หักเครดิต
+          await creditService.updateCredit(event.source.userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
+          
+          // ส่งรูปภาพพร้อมข้อความ
+          const imagePath = prediction === 'CALL' ? './assets/call-signal.jpg' : './assets/put-signal.jpg';
+          
+          return lineService.replyMessage(event.replyToken, [
+            {
+              type: 'text',
+              text: responseText
+            },
+            {
+              type: 'image',
+              originalContentUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/images/${prediction.toLowerCase()}-signal.jpg`,
+              previewImageUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/images/${prediction.toLowerCase()}-signal.jpg`
+            }
+          ]);
+          
+        } catch (error) {
+          console.error('Error analyzing forex pair:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์คู่เงิน\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
           });
         }
         

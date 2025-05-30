@@ -1,4 +1,4 @@
-// สร้าง Flex Message สำหรับแสดงแพ็คเกจเติมเครดิต (Dark Sci-Fi Theme)
+//AI-Server/utils/flexMessages.js
 function createCreditPackagesMessage() {
   return {
     type: "flex",
@@ -938,8 +938,302 @@ function createPaymentSuccessMessage(paymentData, totalCredits) {
   };
 }
 
+// เพิ่มฟังก์ชันสร้างเมนูคู่เงิน AI-Auto
+function createForexPairsMessage() {
+  return {
+    type: "flex",
+    altText: "📈 AI-Auto คู่เงิน Forex",
+    contents: {
+      type: "carousel",
+      contents: [
+        // การ์ดที่ 1 - Major Pairs (1)
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🔥 MAJOR PAIRS",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#ff6b35",
+            paddingAll: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇺🇸🇪🇺 EUR/USD",
+                  data: "action=forex_analysis&pair=EUR/USD"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link", 
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇺🇸🇬🇧 GBP/USD",
+                  data: "action=forex_analysis&pair=GBP/USD"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm", 
+                action: {
+                  type: "postback",
+                  label: "🇺🇸🇯🇵 USD/JPY",
+                  data: "action=forex_analysis&pair=USD/JPY"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback", 
+                  label: "🇺🇸🇨🇭 USD/CHF",
+                  data: "action=forex_analysis&pair=USD/CHF"
+                },
+                color: "#495057"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#f8f9fa"
+          }
+        },
+        // การ์ดที่ 2 - Major Pairs (2)
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "⭐ CROSS PAIRS",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#20bf6b",
+            paddingAll: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇦🇺🇺🇸 AUD/USD",
+                  data: "action=forex_analysis&pair=AUD/USD"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇳🇿🇺🇸 NZD/USD",
+                  data: "action=forex_analysis&pair=NZD/USD"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇺🇸🇨🇦 USD/CAD",
+                  data: "action=forex_analysis&pair=USD/CAD"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇪🇺🇬🇧 EUR/GBP",
+                  data: "action=forex_analysis&pair=EUR/GBP"
+                },
+                color: "#495057"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#f8f9fa"
+          }
+        },
+        // การ์ดที่ 3 - Special Assets
+        {
+          type: "bubble",
+          size: "micro",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "💎 SPECIAL",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm",
+                align: "center"
+              }
+            ],
+            backgroundColor: "#8e44ad",
+            paddingAll: "15px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇪🇺🇯🇵 EUR/JPY",
+                  data: "action=forex_analysis&pair=EUR/JPY"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🇬🇧🇯🇵 GBP/JPY",
+                  data: "action=forex_analysis&pair=GBP/JPY"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "₿ BTC/USD",
+                  data: "action=forex_analysis&pair=BTC/USD"
+                },
+                color: "#495057"
+              },
+              {
+                type: "button",
+                style: "link",
+                height: "sm",
+                action: {
+                  type: "postback",
+                  label: "🥇 GOLD",
+                  data: "action=forex_analysis&pair=GOLD"
+                },
+                color: "#495057"
+              }
+            ],
+            spacing: "xs",
+            paddingAll: "15px",
+            backgroundColor: "#f8f9fa"
+          }
+        }
+      ]
+    }
+  };
+}
+
+// ฟังก์ชันคำนวณเวลา 5 นาทีข้างหน้า (ปัดขึ้นไปที่ 5 นาทีถัดไป)
+function calculateNextTimeSlot() {
+  const now = new Date();
+  const currentMinutes = now.getMinutes();
+  const currentHours = now.getHours();
+  
+  // หาจำนวนนาทีที่ต้องเพิ่มเพื่อไปถึง 5 นาทีถัดไป
+  let targetMinutes;
+  if (currentMinutes < 5) {
+    targetMinutes = 5;
+  } else if (currentMinutes < 10) {
+    targetMinutes = 10;
+  } else if (currentMinutes < 15) {
+    targetMinutes = 15;
+  } else if (currentMinutes < 20) {
+    targetMinutes = 20;
+  } else if (currentMinutes < 25) {
+    targetMinutes = 25;
+  } else if (currentMinutes < 30) {
+    targetMinutes = 30;
+  } else if (currentMinutes < 35) {
+    targetMinutes = 35;
+  } else if (currentMinutes < 40) {
+    targetMinutes = 40;
+  } else if (currentMinutes < 45) {
+    targetMinutes = 45;
+  } else if (currentMinutes < 50) {
+    targetMinutes = 50;
+  } else if (currentMinutes < 55) {
+    targetMinutes = 55;
+  } else {
+    // ถ้าเกิน 55 นาที ให้ไปชั่วโมงถัดไปที่ 00 นาที
+    targetMinutes = 0;
+  }
+  
+  const targetTime = new Date();
+  
+  if (targetMinutes === 0 && currentMinutes >= 55) {
+    // ไปชั่วโมงถัดไป
+    targetTime.setHours(currentHours + 1);
+    targetTime.setMinutes(0);
+  } else {
+    targetTime.setMinutes(targetMinutes);
+  }
+  
+  targetTime.setSeconds(0);
+  targetTime.setMilliseconds(0);
+  
+  // ส่งกลับในรูปแบบ HH:MM
+  return targetTime.toLocaleTimeString('th-TH', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Bangkok'
+  });
+}
+
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
-  createPaymentSuccessMessage
+  createPaymentSuccessMessage,
+  createForexPairsMessage,
+  calculateNextTimeSlot
 };

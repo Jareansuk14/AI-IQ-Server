@@ -1,3 +1,4 @@
+//AI-Server/services/paymentService.js
 const PaymentTransaction = require('../models/paymentTransaction');
 const User = require('../models/user');
 const creditService = require('./creditService');

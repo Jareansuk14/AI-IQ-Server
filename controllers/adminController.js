@@ -1,4 +1,4 @@
-// controllers/adminController.js
+//AI-Server/controllers/adminController.js
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
 const Command = require('../models/command');

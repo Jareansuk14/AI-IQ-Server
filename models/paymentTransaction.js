@@ -1,3 +1,4 @@
+//AI-Server/models/paymentTransaction.js
 const mongoose = require('mongoose');
 
 const PaymentTransactionSchema = new mongoose.Schema({

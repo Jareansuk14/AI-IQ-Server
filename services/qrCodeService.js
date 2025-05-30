@@ -1,3 +1,4 @@
+//AI-Server/services/qrCodeService.js
 const QRCode = require('qrcode');
 const generatePayload = require('promptpay-qr');
 

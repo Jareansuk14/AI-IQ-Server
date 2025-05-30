@@ -1,3 +1,4 @@
+//AI-Server/services/lineService.js
 const line = require('@line/bot-sdk');
 require('dotenv').config();
 
