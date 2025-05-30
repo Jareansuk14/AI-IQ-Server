@@ -1,7 +1,9 @@
-//AI-Server/services/tradingTracker.js - Main Tracking Service
+//AI-Server/services/tradingTracker.js - แก้ไข startTracking function
+
 const TradingSession = require('../models/tradingSession');
 const iqOptionService = require('./iqOptionService');
 const lineService = require('./lineService');
+const User = require('../models/user'); // เพิ่มบรรทัดนี้
 const { createContinueTradeMessage } = require('../utils/flexMessages');
 
 class TradingTracker {
@@ -9,10 +11,16 @@ class TradingTracker {
     this.checkInterval = null;
   }
 
-  // เริ่มติดตามผลการเทรดใหม่
+  // เริ่มติดตามผลการเทรดใหม่ - แก้ไขให้หา user ก่อน
   async startTracking(lineUserId, pair, prediction, entryTime) {
     try {
       console.log(`Starting tracking for ${lineUserId}: ${pair} ${prediction} at ${entryTime}`);
+      
+      // หาข้อมูล user จาก lineUserId ก่อน
+      const user = await User.findOne({ lineUserId });
+      if (!user) {
+        throw new Error('ไม่พบข้อมูลผู้ใช้');
+      }
       
       // ตรวจสอบว่าผู้ใช้มี session ที่กำลังติดตามอยู่หรือไม่
       const existingSession = await TradingSession.findOne({
@@ -24,8 +32,9 @@ class TradingTracker {
         throw new Error('คุณมีการติดตามผลอยู่แล้ว กรุณารอจนกว่าจะเสร็จสิ้น');
       }
       
-      // สร้าง session ใหม่
+      // สร้าง session ใหม่ (ส่ง user ObjectId ด้วย)
       const session = new TradingSession({
+        user: user._id,  // เพิ่มบรรทัดนี้
         lineUserId,
         pair,
         prediction,
