@@ -1,14 +1,17 @@
-//AI-Server/controllers/lineController.js
+//AI-Server/controllers/lineController.js - อัปเดตเพื่อรองรับระบบติดตามผล
+
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
 const creditService = require('../services/creditService');
 const paymentService = require('../services/paymentService');
 const qrCodeService = require('../services/qrCodeService');
+const tradingTracker = require('../services/tradingTracker'); // เพิ่มบรรทัดนี้
 const { 
   createCreditPackagesMessage, 
   createPaymentInfoMessage,
   createForexPairsMessage,
-  calculateNextTimeSlot
+  calculateNextTimeSlot,
+  createContinueTradeMessage
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -121,6 +124,28 @@ const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
   
   try {
+    // ตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
+    const isTracking = await tradingTracker.isUserTracking(event.source.userId);
+    
+    if (isTracking) {
+      // ถ้ากำลังติดตามผล ให้แสดงข้อความเตือน
+      if (text === 'ยกเลิก' || text === 'cancel' || text === 'หยุด') {
+        // อนุญาตให้ยกเลิกการติดตาม
+        const cancelled = await tradingTracker.cancelTracking(event.source.userId);
+        if (cancelled) {
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '✅ ยกเลิกการติดตามผลเรียบร้อยแล้ว\n\n💡 ตอนนี้สามารถใช้คำสั่งอื่นได้แล้ว'
+          });
+        }
+      }
+      
+      return lineService.replyMessage(event.replyToken, {
+        type: 'text',
+        text: '🔍 กำลังติดตามผลการเทรดอยู่\n\n⏳ กรุณารอจนกว่าจะเสร็จสิ้น\nหรือพิมพ์ "ยกเลิก" เพื่อหยุดการติดตาม\n\n📊 ระบบจะแจ้งผลให้ทราบเมื่อเสร็จสิ้น'
+      });
+    }
+    
     // คำสั่งดูเครดิต
     if (text === 'เครดิต' || text === 'credit' || text === 'เช็คเครดิต') {
       const credits = await creditService.checkCredit(event.source.userId);
@@ -190,9 +215,6 @@ const handleSpecialCommand = async (event) => {
 };
 
 // ฟังก์ชันจัดการ Postback Events (สำหรับปุ่มใน Flex Message)
-//AI-Server/controllers/lineController.js - อัปเดตฟังก์ชัน handlePostbackEvent
-
-// ฟังก์ชันจัดการ Postback Events (สำหรับปุ่มใน Flex Message)
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -246,12 +268,21 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // อัปเดต case สำหรับการวิเคราะห์ Forex พร้อมข้อความกำลังประมวลผล
+      // อัปเดต case สำหรับการวิเคราะห์ Forex พร้อมระบบติดตามผล
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
         try {
           console.log(`Processing forex analysis for pair: ${forexPair}`);
+          
+          // ตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
+          const isTracking = await tradingTracker.isUserTracking(event.source.userId);
+          if (isTracking) {
+            return lineService.replyMessage(event.replyToken, {
+              type: 'text',
+              text: '🔍 คุณกำลังติดตามผลการเทรดอยู่\n\n⏳ กรุณารอจนกว่าจะเสร็จสิ้น\nพิมพ์ "ยกเลิก" เพื่อหยุดการติดตาม'
+            });
+          }
           
           // ส่งข้อความ "กำลังประมวลผล..." ทันทีหลังจากกดการ์ด
           await lineService.replyMessage(event.replyToken, {
@@ -264,7 +295,6 @@ const handlePostbackEvent = async (event) => {
           const { user } = await saveOrUpdateUser(event.source.userId, profile);
           
           if (user.credits <= 0) {
-            // ใช้ pushMessage เพราะ replyToken ใช้ไปแล้ว
             return lineService.pushMessage(event.source.userId, {
               type: 'text',
               text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
@@ -295,7 +325,7 @@ const handlePostbackEvent = async (event) => {
           // สร้างข้อความตามรูปแบบที่ต้องการ
           const formattedPair = `💰 ${forexPair} (M5)`;
           const responseText = `${formattedPair}\n💡 ผลการวิเคราะห์: ${prediction}\n⏰ เข้าเทรดตอน: ${targetTime}\n💎 เครดิตคงเหลือ: ${remainingCredits} เครดิต`;
-          
+         
           console.log('Sending response with image and text');
           
           // URL ของรูปภาพตามการทำนาย
@@ -304,7 +334,7 @@ const handlePostbackEvent = async (event) => {
           const imageUrl = `${baseURL}/images/${imageFileName}`;
           
           // ส่งผลลัพธ์ผ่าน pushMessage (เพราะ replyToken ใช้ไปแล้ว)
-          return lineService.pushMessage(event.source.userId, [
+          await lineService.pushMessage(event.source.userId, [
             // ส่งรูปภาพก่อน
             {
               type: 'image',
@@ -318,6 +348,9 @@ const handlePostbackEvent = async (event) => {
             }
           ]);
           
+          // เริ่มติดตามผลการเทรด
+          await tradingTracker.startTracking(event.source.userId, forexPair, prediction, targetTime);
+          
         } catch (error) {
           console.error('Error analyzing forex pair:', error);
           
@@ -327,6 +360,24 @@ const handlePostbackEvent = async (event) => {
             text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์คู่เงิน\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
           });
         }
+        break;
+
+      // เพิ่ม case ใหม่สำหรับการ์ด "เทรดต่อไหม?"
+      case 'continue_trade':
+        const answer = params.get('answer');
+        
+        if (answer === 'yes') {
+          // ต้องการเทรดต่อ - แสดงการ์ดคู่เงิน
+          const forexMessage = createForexPairsMessage();
+          return lineService.replyMessage(event.replyToken, forexMessage);
+        } else {
+          // ไม่ต้องการเทรดต่อ - ส่งข้อความลา
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '👋 ขอบคุณที่ใช้บริการ AI-Auto!\n\n🎯 หวังว่าการวิเคราะห์จะเป็นประโยชน์\n💫 พบกันใหม่ครั้งหน้า\n\n💡 ต้องการใช้งานอีกครั้ง สามารถพิมพ์ "AI-Auto" ได้ตลอดเวลา'
+          });
+        }
+        break;
         
       default:
         console.log('Unknown postback action:', action);
@@ -396,6 +447,15 @@ const handleEvent = async (event) => {
   const startTime = Date.now();
   
   try {
+    // ตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
+    const isTracking = await tradingTracker.isUserTracking(event.source.userId);
+    if (isTracking) {
+      return lineService.replyMessage(event.replyToken, {
+        type: 'text',
+        text: '🔍 กำลังติดตามผลการเทรดอยู่\n\n⏳ กรุณารอจนกว่าจะเสร็จสิ้น\nพิมพ์ "ยกเลิก" เพื่อหยุดการติดตาม'
+      });
+    }
+    
     // ดึงข้อมูลโปรไฟล์ของผู้ใช้
     const profile = await lineService.getUserProfile(event.source.userId);
     

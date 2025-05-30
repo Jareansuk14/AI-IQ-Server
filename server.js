@@ -1,10 +1,12 @@
-//AI-Server/server.js
+//AI-Server/server.js - อัปเดตเพื่อเริ่มต้น Trading Tracker
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs'); 
 const { connectDB, checkConnection } = require('./config/db');
-const paymentChecker = require('./services/paymentChecker'); // เพิ่มบรรทัดนี้
+const paymentChecker = require('./services/paymentChecker');
+const tradingTracker = require('./services/tradingTracker'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 const app = express();
@@ -267,6 +269,82 @@ app.get('/api/forex/pairs', (req, res) => {
   }
 });
 
+// === เพิ่ม API endpoints สำหรับ Trading Tracker ===
+
+// API สำหรับดู Trading Sessions ที่กำลังติดตาม
+app.get('/api/trading/active', async (req, res) => {
+  try {
+    const TradingSession = require('./models/tradingSession');
+    const activeSessions = await TradingSession.find({ status: 'tracking' })
+      .populate('user', 'lineUserId displayName')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      count: activeSessions.length,
+      sessions: activeSessions
+    });
+  } catch (error) {
+    console.error('Error getting active trading sessions:', error);
+    res.status(500).json({ error: 'Failed to get active sessions' });
+  }
+});
+
+// API สำหรับดูสถิติ Trading
+app.get('/api/trading/stats', async (req, res) => {
+  try {
+    const TradingSession = require('./models/tradingSession');
+    
+    const stats = {
+      total: await TradingSession.countDocuments(),
+      tracking: await TradingSession.countDocuments({ status: 'tracking' }),
+      won: await TradingSession.countDocuments({ status: 'won' }),
+      lost: await TradingSession.countDocuments({ status: 'lost' }),
+      cancelled: await TradingSession.countDocuments({ status: 'cancelled' })
+    };
+    
+    // คำนวณ win rate
+    const completed = stats.won + stats.lost;
+    stats.winRate = completed > 0 ? ((stats.won / completed) * 100).toFixed(2) : 0;
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error getting trading stats:', error);
+    res.status(500).json({ error: 'Failed to get trading stats' });
+  }
+});
+
+// API สำหรับยกเลิกการติดตาม (สำหรับแอดมิน)
+app.post('/api/trading/cancel/:sessionId', async (req, res) => {
+  try {
+    const TradingSession = require('./models/tradingSession');
+    const session = await TradingSession.findById(req.params.sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    if (session.status !== 'tracking') {
+      return res.status(400).json({ error: 'Session is not active' });
+    }
+    
+    session.status = 'cancelled';
+    session.completedAt = new Date();
+    await session.save();
+    
+    // แจ้งผู้ใช้
+    const lineService = require('./services/lineService');
+    await lineService.pushMessage(session.lineUserId, {
+      type: 'text',
+      text: '⚠️ การติดตามผลถูกยกเลิกโดยระบบ\n\n💡 ตอนนี้สามารถใช้คำสั่งอื่นได้แล้ว'
+    });
+    
+    res.json({ message: 'Session cancelled successfully' });
+  } catch (error) {
+    console.error('Error cancelling session:', error);
+    res.status(500).json({ error: 'Failed to cancel session' });
+  }
+});
+
 // Serve static assets for the admin dashboard
 if (process.env.NODE_ENV === 'production') {
   const clientBuildPath = path.resolve(__dirname, 'client', 'build');
@@ -324,6 +402,12 @@ connectDB()
       paymentChecker.startAutoCheck(2); // ตรวจสอบทุก 2 นาที
       console.log('Payment checker started');
     }, 5000); // รอ 5 วินาทีให้ระบบพร้อม
+    
+    // เริ่มระบบติดตามผลการเทรด
+    setTimeout(() => {
+      tradingTracker.startScheduler(); // เริ่ม scheduler สำหรับเช็คผล
+      console.log('Trading tracker started');
+    }, 7000); // รอ 7 วินาทีให้ระบบพร้อม
   })
   .catch(err => {
     console.error('Database connection attempt failed:', err);
@@ -334,6 +418,7 @@ connectDB()
       console.log(`Server running on port ${PORT}`);
       console.log(`AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
       console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
+      console.log('Trading tracker scheduler will start in 7 seconds...');
     });
   });
 
@@ -341,11 +426,13 @@ connectDB()
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
   await paymentChecker.stop();
+  tradingTracker.stopScheduler(); // หยุด trading tracker
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Shutting down gracefully...');
   await paymentChecker.stop();
+  tradingTracker.stopScheduler(); // หยุด trading tracker
   process.exit(0);
 });

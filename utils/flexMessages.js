@@ -1991,10 +1991,100 @@ function calculateNextTimeSlot() {
   });
 }
 
+function createContinueTradeMessage() {
+  return {
+    type: "flex",
+    altText: "🎯 ต้องการเทรดต่อไหม?",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "🎯 เทรดต่อไหม?",
+            weight: "bold",
+            color: "#ffffff",
+            size: "lg",
+            align: "center"
+          }
+        ],
+        backgroundColor: "#177ddc",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "การติดตามผลเสร็จสิ้นแล้ว",
+            size: "md",
+            color: "#ffffff",
+            align: "center",
+            margin: "md"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          {
+            type: "text",
+            text: "ต้องการวิเคราะห์คู่เงินใหม่หรือไม่?",
+            size: "sm",
+            color: "#8c8c8c",
+            align: "center",
+            wrap: true,
+            margin: "xl"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            height: "sm",
+            action: {
+              type: "postback",
+              label: "✅ เทรดต่อ",
+              data: "action=continue_trade&answer=yes"
+            },
+            color: "#49aa19"
+          },
+          {
+            type: "button",
+            style: "secondary",
+            height: "sm",
+            action: {
+              type: "postback",
+              label: "❌ พอแล้ว",
+              data: "action=continue_trade&answer=no"
+            },
+            margin: "sm"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
+// อัปเดต module.exports
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
   createPaymentSuccessMessage,
   createForexPairsMessage,
-  calculateNextTimeSlot
+  calculateNextTimeSlot,
+  createContinueTradeMessage  // เพิ่มบรรทัดนี้
 };
