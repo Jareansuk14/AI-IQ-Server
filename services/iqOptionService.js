@@ -21,7 +21,7 @@ class IQOptionService {
         
         console.log(`🔧 Command: ${command}`);
 
-        exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
+        exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
           if (error) {
             console.error(`❌ Python execution error: ${error.message}`);
             resolve({
