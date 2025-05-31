@@ -1994,7 +1994,7 @@ function calculateNextTimeSlot() {
 function createContinueTradeMessage() {
   return {
     type: "flex",
-    altText: "🎯 ต้องการเทรดต่อไหม?",
+    altText: "🎯 เทรดต่อหรือไม่?",
     contents: {
       type: "bubble",
       header: {
@@ -2003,15 +2003,23 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "🎯 ต้องการเทรดต่อไหม?",
+            text: "🎯",
+            size: "xxl",
+            align: "center",
+            color: "#ffffff"
+          },
+          {
+            type: "text",
+            text: "เทรดต่อไหม?",
             weight: "bold",
             color: "#ffffff",
-            size: "lg",
-            align: "center"
+            size: "xl",
+            align: "center",
+            margin: "md"
           }
         ],
         backgroundColor: "#177ddc",
-        paddingAll: "20px"
+        paddingAll: "25px"
       },
       body: {
         type: "box",
@@ -2019,9 +2027,10 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "✨ พร้อมสำหรับการวิเคราะห์ครั้งต่อไป",
+            text: "🚀 พร้อมสำหรับการเทรดครั้งถัดไป?",
+            weight: "bold",
+            size: "lg",
             color: "#ffffff",
-            size: "md",
             align: "center",
             margin: "lg"
           },
@@ -2031,16 +2040,38 @@ function createContinueTradeMessage() {
             color: "#303030"
           },
           {
-            type: "text",
-            text: "📈 เลือกคู่เงินใหม่และเริ่มการวิเคราะห์\nหรือหยุดพักและกลับมาใหม่ภายหลัง",
-            color: "#8c8c8c",
-            size: "sm",
-            wrap: true,
-            align: "center",
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "📊 เลือกคู่เงินใหม่เพื่อวิเคราะห์",
+                color: "#8c8c8c",
+                size: "sm",
+                align: "center",
+                margin: "lg"
+              },
+              {
+                type: "text",
+                text: "🎯 ระบบ AI พร้อมให้คำแนะนำ",
+                color: "#8c8c8c",
+                size: "sm",
+                align: "center",
+                margin: "sm"
+              },
+              {
+                type: "text",
+                text: "📈 ติดตามผลแบบ Real-time",
+                color: "#8c8c8c",
+                size: "sm",
+                align: "center",
+                margin: "sm"
+              }
+            ],
             margin: "lg"
           }
         ],
-        spacing: "md",
+        spacing: "sm",
         paddingAll: "20px",
         backgroundColor: "#1f1f1f"
       },
@@ -2051,23 +2082,24 @@ function createContinueTradeMessage() {
           {
             type: "button",
             style: "primary",
-            height: "md",
             action: {
               type: "postback",
-              label: "🚀 เทรดต่อ",
-              data: "action=continue_trade"
+              label: "🚀 เทรดต่อ!",
+              data: "action=continue_trading"
             },
-            color: "#49aa19"
+            color: "#49aa19",
+            height: "md",
+            margin: "sm"
           },
           {
             type: "button",
             style: "secondary",
-            height: "sm",
             action: {
               type: "postback",
-              label: "🛑 หยุดพัก",
-              data: "action=stop_trade"
+              label: "🛑 พักก่อน",
+              data: "action=stop_trading"
             },
+            height: "sm",
             margin: "sm"
           }
         ],
@@ -2079,12 +2111,12 @@ function createContinueTradeMessage() {
   };
 }
 
-// อัปเดต module.exports
+// อัปเดต module.exports เพื่อรวมฟังก์ชันใหม่
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
   createPaymentSuccessMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage  // เพิ่มฟังก์ชันใหม่
+  createContinueTradeMessage  // เพิ่มบรรทัดนี้
 };

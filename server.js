@@ -4,8 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs'); 
 const { connectDB, checkConnection } = require('./config/db');
-const paymentChecker = require('./services/paymentChecker');
-const trackingService = require('./services/trackingService'); // เพิ่มสำหรับระบบติดตาม
+const paymentChecker = require('./services/paymentChecker'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 const app = express();
@@ -268,161 +267,18 @@ app.get('/api/forex/pairs', (req, res) => {
   }
 });
 
-// === เพิ่ม API endpoints สำหรับระบบติดตามผล ===
+// === API endpoints สำหรับ Result Tracking System ===
 
-// API สำหรับดู tracking sessions ทั้งหมด (สำหรับแอดมิน)
-app.get('/api/tracking/sessions', async (req, res) => {
+// API สำหรับดูสถิติการติดตามผลทั้งหมด
+app.get('/api/tracking/stats', (req, res) => {
   try {
-    const TrackingSession = require('./models/trackingSession');
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const status = req.query.status; // tracking, won, lost, cancelled
-    const skip = (page - 1) * limit;
-    
-    let matchCondition = {};
-    if (status) {
-      matchCondition.status = status;
-    }
-    
-    const sessions = await TrackingSession.find(matchCondition)
-      .populate('user', 'lineUserId displayName')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
-    
-    const total = await TrackingSession.countDocuments(matchCondition);
-    
-    const formattedSessions = sessions.map(session => ({
-      id: session._id,
-      user: session.user,
-      pair: session.pair,
-      prediction: session.prediction,
-      entryTime: session.entryTime,
-      targetTime: session.targetTime,
-      currentRound: session.currentRound,
-      maxRounds: session.maxRounds,
-      status: session.status,
-      winRound: session.winRound,
-      results: session.results,
-      createdAt: session.createdAt,
-      completedAt: session.completedAt
-    }));
+    const resultTrackingService = require('./services/resultTrackingService');
+    const stats = resultTrackingService.getTrackingStats();
     
     res.json({
-      sessions: formattedSessions,
-      pagination: {
-        total,
-        page,
-        pages: Math.ceil(total / limit),
-        limit
-      }
-    });
-  } catch (error) {
-    console.error('Error getting tracking sessions:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API สำหรับดูสถิติการติดตาม
-app.get('/api/tracking/stats', async (req, res) => {
-  try {
-    const TrackingSession = require('./models/trackingSession');
-    
-    // สถิติภาพรวม
-    const totalSessions = await TrackingSession.countDocuments();
-    const activeSessions = await TrackingSession.countDocuments({ status: 'tracking' });
-    const wonSessions = await TrackingSession.countDocuments({ status: 'won' });
-    const lostSessions = await TrackingSession.countDocuments({ status: 'lost' });
-    
-    // คำนวณ win rate
-    const completedSessions = wonSessions + lostSessions;
-    const winRate = completedSessions > 0 ? ((wonSessions / completedSessions) * 100).toFixed(2) : 0;
-    
-    // สถิติตามคู่เงิน
-    const pairStats = await TrackingSession.aggregate([
-      {
-        $group: {
-          _id: '$pair',
-          total: { $sum: 1 },
-          won: { $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] } },
-          lost: { $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] } },
-          avgWinRound: { $avg: '$winRound' }
-        }
-      },
-      {
-        $project: {
-          pair: '$_id',
-          total: 1,
-          won: 1,
-          lost: 1,
-          winRate: {
-            $cond: [
-              { $gt: [{ $add: ['$won', '$lost'] }, 0] },
-              { $multiply: [{ $divide: ['$won', { $add: ['$won', '$lost'] }] }, 100] },
-              0
-            ]
-          },
-          avgWinRound: { $round: ['$avgWinRound', 2] }
-        }
-      },
-      { $sort: { total: -1 } }
-    ]);
-    
-    // สถิติตามการทำนาย (CALL vs PUT)
-    const predictionStats = await TrackingSession.aggregate([
-      {
-        $group: {
-          _id: '$prediction',
-          total: { $sum: 1 },
-          won: { $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] } },
-          lost: { $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] } }
-        }
-      },
-      {
-        $project: {
-          prediction: '$_id',
-          total: 1,
-          won: 1,
-          lost: 1,
-          winRate: {
-            $cond: [
-              { $gt: [{ $add: ['$won', '$lost'] }, 0] },
-              { $multiply: [{ $divide: ['$won', { $add: ['$won', '$lost'] }] }, 100] },
-              0
-            ]
-          }
-        }
-      }
-    ]);
-    
-    // สถิติการชนะตามรอบ
-    const roundStats = await TrackingSession.aggregate([
-      { $match: { status: 'won' } },
-      {
-        $group: {
-          _id: '$winRound',
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-    
-    res.json({
-      overview: {
-        totalSessions,
-        activeSessions,
-        wonSessions,
-        lostSessions,
-        completedSessions,
-        winRate: parseFloat(winRate)
-      },
-      pairStats,
-      predictionStats,
-      roundStats: roundStats.map(r => ({
-        round: r._id,
-        count: r.count,
-        percentage: completedSessions > 0 ? ((r.count / wonSessions) * 100).toFixed(2) : 0
-      }))
+      message: 'Tracking statistics',
+      timestamp: new Date().toISOString(),
+      ...stats
     });
   } catch (error) {
     console.error('Error getting tracking stats:', error);
@@ -430,84 +286,202 @@ app.get('/api/tracking/stats', async (req, res) => {
   }
 });
 
-// API สำหรับดู session ของผู้ใช้คนใดคนหนึ่ง
-app.get('/api/tracking/user/:userId', async (req, res) => {
+// API สำหรับ force stop การติดตาม (admin)
+app.post('/api/tracking/force-stop/:userId', (req, res) => {
   try {
     const { userId } = req.params;
-    const TrackingSession = require('./models/trackingSession');
+    const resultTrackingService = require('./services/resultTrackingService');
     
-    const sessions = await TrackingSession.find({ lineUserId: userId })
-      .sort({ createdAt: -1 })
-      .limit(20);
-    
-    const stats = await trackingService.getTrackingStats(userId);
+    resultTrackingService.forceStopTracking(userId);
     
     res.json({
-      userId,
-      sessions,
-      stats
+      message: `Force stopped tracking for user ${userId}`,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error getting user tracking data:', error);
+    console.error('Error force stopping tracking:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// API สำหรับยกเลิก tracking session (สำหรับแอดมิน)
-app.post('/api/tracking/cancel/:sessionId', async (req, res) => {
+// API สำหรับทดสอบการเชื่อมต่อ IQ Option
+app.get('/api/iq-option/test', async (req, res) => {
   try {
-    const { sessionId } = req.params;
-    const TrackingSession = require('./models/trackingSession');
+    const iqOptionService = require('./services/iqOptionService');
+    const testResult = await iqOptionService.testConnection();
     
-    const session = await TrackingSession.findById(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-    
-    if (session.status !== 'tracking') {
-      return res.status(400).json({ error: 'Session is not active' });
-    }
-    
-    // ยกเลิก session
-    const cancelled = await trackingService.cancelTracking(session.lineUserId);
-    
-    if (cancelled) {
-      res.json({ message: 'Session cancelled successfully', sessionId });
-    } else {
-      res.status(400).json({ error: 'Failed to cancel session' });
-    }
+    res.json({
+      message: 'IQ Option connection test',
+      timestamp: new Date().toISOString(),
+      ...testResult
+    });
   } catch (error) {
-    console.error('Error cancelling tracking session:', error);
+    console.error('Error testing IQ Option connection:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// API สำหรับทดสอบ candle checker
-app.get('/api/test/candle', async (req, res) => {
+// API สำหรับดึงข้อมูลแท่งเทียนแบบ manual
+app.get('/api/iq-option/candle', async (req, res) => {
   try {
-    const { symbol, time } = req.query;
+    const { pair, time, round } = req.query;
     
-    if (!symbol || !time) {
+    if (!pair || !time || !round) {
       return res.status(400).json({ 
-        error: 'Please provide symbol and time parameters',
-        example: '/api/test/candle?symbol=EURUSD&time=13:45'
+        error: 'Missing required parameters: pair, time, round' 
       });
     }
     
-    const candleChecker = require('./services/candleChecker');
-    const result = await candleChecker.checkCandle(symbol, time);
+    const iqOptionService = require('./services/iqOptionService');
+    const result = await iqOptionService.getCandleColor(pair, time, parseInt(round));
     
     res.json({
-      success: true,
-      result,
-      timestamp: new Date().toISOString()
+      message: 'Candle data retrieved',
+      timestamp: new Date().toISOString(),
+      request: { pair, time, round: parseInt(round) },
+      ...result
     });
   } catch (error) {
-    console.error('Candle check test error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      timestamp: new Date().toISOString()
+    console.error('Error getting candle data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับดูสถิติ IQ Option service
+app.get('/api/iq-option/stats', (req, res) => {
+  try {
+    const iqOptionService = require('./services/iqOptionService');
+    const stats = iqOptionService.getUsageStats();
+    
+    res.json({
+      message: 'IQ Option service statistics',
+      timestamp: new Date().toISOString(),
+      ...stats
     });
+  } catch (error) {
+    console.error('Error getting IQ Option stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับดึงข้อมูลแท่งเทียนหลายรอบ (สำหรับ testing)
+app.get('/api/iq-option/multiple-candles', async (req, res) => {
+  try {
+    const { pair, time, rounds } = req.query;
+    
+    if (!pair || !time || !rounds) {
+      return res.status(400).json({ 
+        error: 'Missing required parameters: pair, time, rounds' 
+      });
+    }
+    
+    const iqOptionService = require('./services/iqOptionService');
+    const results = await iqOptionService.getMultipleCandles(pair, time, parseInt(rounds));
+    
+    res.json({
+      message: 'Multiple candle data retrieved',
+      timestamp: new Date().toISOString(),
+      request: { pair, time, rounds: parseInt(rounds) },
+      results
+    });
+  } catch (error) {
+    console.error('Error getting multiple candle data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับ admin ดูรายละเอียด session การติดตาม
+app.get('/api/admin/tracking/sessions', (req, res) => {
+  try {
+    // ต้องมี middleware ตรวจสอบสิทธิ์ admin ที่นี่
+    const resultTrackingService = require('./services/resultTrackingService');
+    const stats = resultTrackingService.getTrackingStats();
+    
+    res.json({
+      message: 'Active tracking sessions',
+      timestamp: new Date().toISOString(),
+      totalSessions: stats.activeSessions,
+      totalBlockedUsers: stats.blockedUsers,
+      sessions: stats.sessions.map(session => ({
+        ...session,
+        duration: new Date() - session.startedAt,
+        durationMinutes: Math.round((new Date() - session.startedAt) / 60000)
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting tracking sessions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับทดสอบทั้งระบบ (comprehensive test)
+app.get('/api/test/full-system', async (req, res) => {
+  try {
+    const results = {
+      timestamp: new Date().toISOString(),
+      tests: {}
+    };
+    
+    // ทดสอบ Forex pairs
+    results.tests.forexPairs = {
+      totalPairs: 12,
+      supportedPairs: [
+        'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF',
+        'AUD/USD', 'NZD/USD', 'USD/CAD', 'EUR/GBP',
+        'EUR/JPY', 'GBP/JPY', 'BTC/USD', 'GOLD'
+      ]
+    };
+    
+    // ทดสอบ AI Service
+    try {
+      const aiService = require('./services/aiService');
+      const testResponse = await aiService.processForexQuestion('Test question for EUR/USD CALL or PUT');
+      results.tests.aiService = {
+        status: 'working',
+        response: testResponse
+      };
+    } catch (error) {
+      results.tests.aiService = {
+        status: 'error',
+        error: error.message
+      };
+    }
+    
+    // ทดสอบ IQ Option
+    try {
+      const iqOptionService = require('./services/iqOptionService');
+      const iqTest = await iqOptionService.testConnection();
+      results.tests.iqOption = iqTest;
+    } catch (error) {
+      results.tests.iqOption = {
+        status: 'error',
+        error: error.message
+      };
+    }
+    
+    // ทดสอบ Result Tracking
+    const resultTrackingService = require('./services/resultTrackingService');
+    const trackingStats = resultTrackingService.getTrackingStats();
+    results.tests.resultTracking = {
+      status: 'working',
+      activeSessions: trackingStats.activeSessions,
+      blockedUsers: trackingStats.blockedUsers
+    };
+    
+    // ทดสอบ Images
+    const callImageExists = fs.existsSync(path.join(__dirname, 'assets', 'call-signal.jpg'));
+    const putImageExists = fs.existsSync(path.join(__dirname, 'assets', 'put-signal.jpg'));
+    
+    results.tests.images = {
+      callSignal: callImageExists,
+      putSignal: putImageExists,
+      ready: callImageExists && putImageExists
+    };
+    
+    res.json(results);
+  } catch (error) {
+    console.error('Error running full system test:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -578,27 +552,59 @@ connectDB()
       console.log(`Server running on port ${PORT}`);
       console.log(`AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
       console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
-      console.log(`Tracking system initialized`);
-      
-      // แสดง API endpoints ที่สำคัญ
-      console.log('\n🎯 Available API Endpoints:');
-      console.log('📊 AI-Auto: /api/test/forex?pair=EUR/USD');
-      console.log('🔍 Tracking: /api/tracking/sessions');
-      console.log('📈 Candle Test: /api/test/candle?symbol=EURUSD&time=13:45');
-      console.log('🖼️  Images: /api/images/check');
-      console.log('💰 Payment: /api/payment/pending\n');
+      console.log(`Result Tracking System: READY`);
+      console.log(`IQ Option Integration: READY`);
+      console.log(`Available API endpoints:`);
+      console.log(`  - GET /api/test/full-system`);
+      console.log(`  - GET /api/tracking/stats`);
+      console.log(`  - GET /api/iq-option/test`);
     });
   });
 
 // จัดการการปิดโปรแกรมอย่างสะอาด
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
+  
+  // หยุดระบบ payment checker
   await paymentChecker.stop();
+  
+  // หยุดระบบ result tracking (ถ้าจำเป็น)
+  try {
+    const resultTrackingService = require('./services/resultTrackingService');
+    // Force stop ทุก session ที่ active
+    const stats = resultTrackingService.getTrackingStats();
+    for (const session of stats.sessions) {
+      if (session.isActive) {
+        resultTrackingService.forceStopTracking(session.userId);
+      }
+    }
+    console.log('All tracking sessions stopped');
+  } catch (error) {
+    console.error('Error stopping tracking sessions:', error);
+  }
+  
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Shutting down gracefully...');
+  
+  // หยุดระบบ payment checker
   await paymentChecker.stop();
+  
+  // หยุดระบบ result tracking
+  try {
+    const resultTrackingService = require('./services/resultTrackingService');
+    const stats = resultTrackingService.getTrackingStats();
+    for (const session of stats.sessions) {
+      if (session.isActive) {
+        resultTrackingService.forceStopTracking(session.userId);
+      }
+    }
+    console.log('All tracking sessions stopped');
+  } catch (error) {
+    console.error('Error stopping tracking sessions:', error);
+  }
+  
   process.exit(0);
 });

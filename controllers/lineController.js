@@ -5,13 +5,13 @@ const aiService = require('../services/aiService');
 const creditService = require('../services/creditService');
 const paymentService = require('../services/paymentService');
 const qrCodeService = require('../services/qrCodeService');
-const trackingService = require('../services/trackingService'); // เพิ่มบรรทัดนี้
+const resultTrackingService = require('../services/resultTrackingService'); // เพิ่มบรรทัดนี้
 const { 
   createCreditPackagesMessage, 
   createPaymentInfoMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage // เพิ่มบรรทัดนี้
+  createContinueTradeMessage  // เพิ่มบรรทัดนี้
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -122,44 +122,30 @@ const saveInteraction = async (user, command, imageId, aiResponse, processingTim
 // ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ (เครดิต, แนะนำเพื่อน, เติมเครดิต, AI-Auto)
 const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
+  const userId = event.source.userId;
   
   try {
-    // เพิ่มการตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
-    const isTracking = await trackingService.isUserTracking(event.source.userId);
-    
-    if (isTracking && (text === 'ai-auto' || text === 'aiauto' || text === 'forex' || text === 'เทรด')) {
-      return lineService.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '⏳ คุณกำลังติดตามผลการเทรดอยู่\n\n🔍 กรุณารอให้การติดตามผลเสร็จสิ้นก่อน\n💡 หรือพิมพ์ "ยกเลิก" เพื่อหยุดการติดตาม'
-      });
-    }
-
-    // คำสั่งยกเลิกการติดตาม
-    if (text === 'ยกเลิก' || text === 'cancel' || text === 'หยุด') {
-      if (isTracking) {
-        const cancelled = await trackingService.cancelTracking(event.source.userId);
+    // ตรวจสอบว่า user ถูก block หรือไม่
+    if (resultTrackingService.isUserBlocked(userId)) {
+      // ตรวจสอบคำสั่งยกเลิกติดตาม
+      if (text === 'ยกเลิกติดตาม' || text === 'cancel' || text === 'stop') {
+        const cancelled = await resultTrackingService.cancelTracking(userId);
         if (cancelled) {
-          return lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '✅ ยกเลิกการติดตามผลแล้ว\n\n💡 สามารถเริ่มการวิเคราะห์ใหม่ได้'
-          });
+          return true; // ส่งข้อความแล้วใน cancelTracking
         }
-      } else {
-        return lineService.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '💡 คุณไม่ได้อยู่ในระหว่างการติดตามผล'
-        });
       }
+      
+      // ส่งข้อความแจ้งว่าถูก block
+      await resultTrackingService.handleBlockedUserMessage(userId);
+      return true;
     }
 
     // คำสั่งดูเครดิต
     if (text === 'เครดิต' || text === 'credit' || text === 'เช็คเครดิต') {
-      const credits = await creditService.checkCredit(event.source.userId);
-      let statusText = isTracking ? '\n\n🔍 สถานะ: กำลังติดตามผลอยู่' : '';
-      
+      const credits = await creditService.checkCredit(userId);
       return lineService.replyMessage(event.replyToken, {
         type: 'text',
-        text: `💎 คุณมีเครดิตคงเหลือ ${credits} เครดิต${statusText}\n\n🔄 สามารถแนะนำเพื่อนเพื่อรับเครดิตเพิ่มได้โดยกดที่ปุ่ม "แชร์เพื่อรับเครดิต"\n\n💰 หรือเติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง`
+        text: `💎 คุณมีเครดิตคงเหลือ ${credits} เครดิต\n\n🔄 สามารถแนะนำเพื่อนเพื่อรับเครดิตเพิ่มได้โดยกดที่ปุ่ม "แชร์เพื่อรับเครดิต"\n\n💰 หรือเติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง`
       });
     }
     
@@ -177,7 +163,7 @@ const handleSpecialCommand = async (event) => {
     
     // คำสั่งดูรหัสแนะนำ
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
-      const referralCode = await creditService.getReferralCode(event.source.userId);
+      const referralCode = await creditService.getReferralCode(userId);
       const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
       
       return lineService.replyMessage(event.replyToken, {
@@ -198,7 +184,7 @@ const handleSpecialCommand = async (event) => {
       }
       
       try {
-        const result = await creditService.applyReferralCode(event.source.userId, referralCode.toUpperCase());
+        const result = await creditService.applyReferralCode(userId, referralCode.toUpperCase());
         
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
@@ -228,8 +214,16 @@ const handlePostbackEvent = async (event) => {
     const data = event.postback.data;
     const params = new URLSearchParams(data);
     const action = params.get('action');
+    const userId = event.source.userId;
     
     console.log('Handling postback event:', action, data);
+    
+    // ตรวจสอบว่า user ถูก block หรือไม่ (ยกเว้นคำสั่งพิเศษ)
+    if (resultTrackingService.isUserBlocked(userId) && 
+        !['continue_trading', 'stop_trading'].includes(action)) {
+      await resultTrackingService.handleBlockedUserMessage(userId);
+      return;
+    }
     
     switch (action) {
       case 'buy_credit':
@@ -238,7 +232,7 @@ const handlePostbackEvent = async (event) => {
         try {
           // สร้างรายการชำระเงิน
           const paymentTransaction = await paymentService.createPaymentTransaction(
-            event.source.userId, 
+            userId, 
             packageType
           );
           
@@ -262,7 +256,7 @@ const handlePostbackEvent = async (event) => {
         const paymentId = params.get('payment_id');
         
         try {
-          await paymentService.cancelPayment(paymentId, event.source.userId);
+          await paymentService.cancelPayment(paymentId, userId);
           
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
@@ -276,22 +270,13 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // อัปเดต case สำหรับการวิเคราะห์ Forex พร้อมข้อความกำลังประมวลผลและเริ่มติดตาม
+      // อัปเดต case สำหรับการวิเคราะห์ Forex พร้อมระบบติดตามผล
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
         try {
           console.log(`Processing forex analysis for pair: ${forexPair}`);
           
-          // ตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
-          const isTracking = await trackingService.isUserTracking(event.source.userId);
-          if (isTracking) {
-            return lineService.replyMessage(event.replyToken, {
-              type: 'text',
-              text: '⏳ คุณกำลังติดตามผลการเทรดอยู่\n\n🔍 กรุณารอให้การติดตามผลเสร็จสิ้นก่อน\n💡 หรือพิมพ์ "ยกเลิก" เพื่อหยุดการติดตาม'
-            });
-          }
-
           // ส่งข้อความ "กำลังประมวลผล..." ทันทีหลังจากกดการ์ด
           await lineService.replyMessage(event.replyToken, {
             type: 'text',
@@ -299,12 +284,12 @@ const handlePostbackEvent = async (event) => {
           });
           
           // ตรวจสอบเครดิต
-          const profile = await lineService.getUserProfile(event.source.userId);
-          const { user } = await saveOrUpdateUser(event.source.userId, profile);
+          const profile = await lineService.getUserProfile(userId);
+          const { user } = await saveOrUpdateUser(userId, profile);
           
           if (user.credits <= 0) {
             // ใช้ pushMessage เพราะ replyToken ใช้ไปแล้ว
-            return lineService.pushMessage(event.source.userId, {
+            return lineService.pushMessage(userId, {
               type: 'text',
               text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
             });
@@ -326,10 +311,10 @@ const handlePostbackEvent = async (event) => {
           const prediction = aiResponse.toUpperCase().includes('CALL') ? 'CALL' : 'PUT';
           
           // หักเครดิต
-          await creditService.updateCredit(event.source.userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
+          await creditService.updateCredit(userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
           
           // ตรวจสอบเครดิตคงเหลือ
-          const remainingCredits = await creditService.checkCredit(event.source.userId);
+          const remainingCredits = await creditService.checkCredit(userId);
           
           // สร้างข้อความตามรูปแบบที่ต้องการ
           const formattedPair = `${forexPair} (M5)`;
@@ -343,7 +328,7 @@ const handlePostbackEvent = async (event) => {
           const imageUrl = `${baseURL}/images/${imageFileName}`;
           
           // ส่งผลลัพธ์ผ่าน pushMessage (เพราะ replyToken ใช้ไปแล้ว)
-          await lineService.pushMessage(event.source.userId, [
+          await lineService.pushMessage(userId, [
             // ส่งรูปภาพก่อน
             {
               type: 'image',
@@ -357,58 +342,48 @@ const handlePostbackEvent = async (event) => {
             }
           ]);
 
-          // เริ่มการติดตามผล
-          try {
-            await trackingService.startTracking(event.source.userId, forexPair, prediction, targetTime);
-            console.log(`✅ Started tracking for ${event.source.userId}: ${forexPair} ${prediction} at ${targetTime}`);
-          } catch (trackingError) {
-            console.error('Error starting tracking:', trackingError);
-            // ส่งข้อความแจ้งเตือนถ้าไม่สามารถเริ่มติดตามได้
-            await lineService.pushMessage(event.source.userId, {
-              type: 'text',
-              text: '⚠️ ไม่สามารถเริ่มการติดตามผลได้\nกรุณาลองใหม่อีกครั้ง'
-            });
-          }
+          // เริ่มระบบติดตามผล
+          await resultTrackingService.startTracking(userId, prediction, forexPair, targetTime);
+          
+          return;
           
         } catch (error) {
           console.error('Error analyzing forex pair:', error);
           
           // ส่งข้อความแสดงข้อผิดพลาดผ่าน pushMessage
-          return lineService.pushMessage(event.source.userId, {
+          return lineService.pushMessage(userId, {
             type: 'text',
             text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์คู่เงิน\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
           });
         }
-        break;
 
-      // เพิ่ม case สำหรับการ์ด "เทรดต่อไหม?"
-      case 'continue_trade':
+      // เพิ่ม case ใหม่สำหรับการ์ดเทรดต่อ
+      case 'continue_trading':
         try {
+          // ส่งเมนูคู่เงินให้เลือกใหม่
           const forexMessage = createForexPairsMessage();
           return lineService.replyMessage(event.replyToken, forexMessage);
         } catch (error) {
           console.error('Error showing forex pairs:', error);
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: '❌ เกิดข้อผิดพลาดในการแสดงรายการคู่เงิน'
+            text: '❌ เกิดข้อผิดพลาดในการแสดงเมนูคู่เงิน'
           });
         }
-        break;
 
-      case 'stop_trade':
+      case 'stop_trading':
         try {
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: '🙏 ขอบคุณที่ใช้บริการ!\n\n✨ หวังว่าการวิเคราะห์จะเป็นประโยชน์\n🎯 กลับมาใช้บริการใหม่เมื่อไหร่ก็ได้\n\n💎 พิมพ์ "AI-Auto" เพื่อเริ่มต้นใหม่\n👋 แล้วพบกันใหม่!'
+            text: '👋 ขอบคุณที่ใช้บริการ AI-Auto!\n\n🎯 หวังว่าจะได้เจอกันใหม่\n💪 โชคดีในการเทรดครั้งต่อไป!\n\n✨ พิมพ์ "AI-Auto" เมื่อพร้อมเทรดอีกครั้ง'
           });
         } catch (error) {
-          console.error('Error sending goodbye message:', error);
+          console.error('Error handling stop trading:', error);
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: '👋 แล้วพบกันใหม่!'
+            text: '👋 ขอบคุณที่ใช้บริการ!'
           });
         }
-        break;
         
       default:
         console.log('Unknown postback action:', action);
@@ -469,28 +444,25 @@ const handleEvent = async (event) => {
   
   // หากไม่ใช่ข้อความรูปภาพให้ตอบกลับทันที
   if (event.type !== 'message' || event.message.type !== 'image') {
-    // ตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
-    const isTracking = await trackingService.isUserTracking(event.source.userId);
-    let trackingText = isTracking ? '\n\n🔍 หมายเหตุ: คุณกำลังติดตามผลการเทรดอยู่' : '';
-    
+    // ตรวจสอบว่า user ถูก block หรือไม่
+    if (resultTrackingService.isUserBlocked(event.source.userId)) {
+      return resultTrackingService.handleBlockedUserMessage(event.source.userId);
+    }
+
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: `📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex${trackingText}`
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
+  }
+
+  // ตรวจสอบว่า user ถูก block หรือไม่ก่อนประมวลผลรูปภาพ
+  if (resultTrackingService.isUserBlocked(event.source.userId)) {
+    return resultTrackingService.handleBlockedUserMessage(event.source.userId);
   }
 
   const startTime = Date.now();
   
   try {
-    // ตรวจสอบว่าผู้ใช้กำลังติดตามผลอยู่หรือไม่
-    const isTracking = await trackingService.isUserTracking(event.source.userId);
-    if (isTracking) {
-      return lineService.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '⏳ คุณกำลังติดตามผลการเทรดอยู่\n\n🔍 ไม่สามารถวิเคราะห์รูปภาพใหม่ได้ในขณะนี้\n💡 กรุณารอให้การติดตามผลเสร็จสิ้นก่อน\n\n🛑 พิมพ์ "ยกเลิก" เพื่อหยุดการติดตาม'
-      });
-    }
-
     // ดึงข้อมูลโปรไฟล์ของผู้ใช้
     const profile = await lineService.getUserProfile(event.source.userId);
     

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# AI-Server/scripts/iq_candle_checker.py
 import sys
 import io
 import time
@@ -13,66 +14,126 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 USERNAME = "your_email@example.com"
 PASSWORD = "your_password"
 
-# รับพารามิเตอร์จาก command line
-if len(sys.argv) < 3:
-    print(json.dumps({"error": "ต้องระบุ symbol และ target_time"}, ensure_ascii=False))
-    sys.exit()
-
-symbol = sys.argv[1]  # เช่น EURUSD
-target_time_str = sys.argv[2]  # เช่น 13:45
-
-candle_size = 300  # 5 นาที = 300 วินาที
-
-try:
-    # ✅ เชื่อมต่อ IQ Option
-    I_want_money = IQ_Option(USERNAME, PASSWORD)
-    I_want_money.connect()
-    if not I_want_money.check_connect():
-        print(json.dumps({"error": "❌ ไม่สามารถเชื่อมต่อบัญชี IQ Option ได้"}, ensure_ascii=False))
-        sys.exit()
-
-    # 🕒 แปลง target_time เป็น timestamp
-    hour, minute = target_time_str.split(':')
-    now = datetime.now()
-    target_time = now.replace(hour=int(hour), minute=int(minute), second=0, microsecond=0)
-    
-    # ถ้าเวลาที่ระบุยังไม่ถึง ให้ใช้ของเมื่อวาน
-    if target_time > now:
-        target_time -= timedelta(days=1)
-
-    target_timestamp = int(time.mktime(target_time.timetuple()))
-
-    # 📈 ดึงข้อมูลแท่งเทียน
-    candles = I_want_money.get_candles(symbol, candle_size, 100, target_timestamp)
-
-    # 🔍 หาแท่งที่ตรงกับเวลาที่ระบุ
-    candle_at_target = next((c for c in candles if c['from'] == target_timestamp), None)
-
-    if candle_at_target:
+def main():
+    try:
+        # รับ parameters จาก Node.js
+        if len(sys.argv) < 4:
+            print(json.dumps({
+                "error": "❌ ต้องระบุ parameters: symbol entryTime round"
+            }, ensure_ascii=False))
+            sys.exit(1)
+        
+        symbol = sys.argv[1]  # เช่น "EURUSD"
+        entry_time_str = sys.argv[2]  # เช่น "13:45"
+        round_num = int(sys.argv[3])  # เช่น 1
+        
+        candle_size = 300  # 5 นาที = 300 วินาที
+        
+        # ✅ เชื่อมต่อ IQ Option
+        I_want_money = IQ_Option(USERNAME, PASSWORD)
+        I_want_money.connect()
+        
+        if not I_want_money.check_connect():
+            print(json.dumps({
+                "error": "❌ ไม่สามารถเชื่อมต่อบัญชี IQ Option ได้"
+            }, ensure_ascii=False))
+            sys.exit(1)
+        
+        # 🕒 คำนวณเวลาที่ต้องเช็ค
+        target_timestamp = calculate_target_time(entry_time_str, round_num)
+        
+        if target_timestamp is None:
+            print(json.dumps({
+                "error": "❌ ไม่สามารถคำนวณเวลาได้"
+            }, ensure_ascii=False))
+            sys.exit(1)
+        
+        # 📈 ดึงข้อมูลแท่งเทียน
+        candles = I_want_money.get_candles(symbol, candle_size, 100, target_timestamp)
+        
+        if not candles:
+            print(json.dumps({
+                "error": "❌ ไม่พบข้อมูลแท่งเทียน"
+            }, ensure_ascii=False))
+            sys.exit(1)
+        
+        # 🔍 หาแท่งที่ตรงกับเวลาที่ต้องการ
+        candle_at_target = None
+        for candle in candles:
+            if candle['from'] == target_timestamp:
+                candle_at_target = candle
+                break
+        
+        if not candle_at_target:
+            # ถ้าไม่พบแท่งที่ตรงเวลา ให้หาแท่งที่ใกล้เคียงที่สุด
+            closest_candle = min(candles, key=lambda x: abs(x['from'] - target_timestamp))
+            candle_at_target = closest_candle
+        
+        # 📊 วิเคราะห์แท่งเทียน
         open_price = candle_at_target['open']
         close_price = candle_at_target['close']
         
+        # กำหนดสีแท่งเทียน
         if close_price > open_price:
-            color = "green"
+            color = "green"  # แท่งเขียว (ราคาขึ้น)
         elif close_price < open_price:
-            color = "red"
+            color = "red"    # แท่งแดง (ราคาลง)
         else:
-            color = "doji"
-
+            color = "doji"   # แท่งเท่ากัน
+        
+        # สร้าง timestamp แสดงผล
+        candle_time = datetime.fromtimestamp(candle_at_target['from'])
+        display_time = candle_time.strftime("%H:%M")
+        
         result = {
             "symbol": symbol,
-            "time": target_time.strftime("%H:%M"),
+            "time": display_time,
             "candle_size": "5min",
             "open": round(open_price, 5),
             "close": round(close_price, 5),
             "color": color,
-            "timestamp": target_timestamp
+            "round": round_num,
+            "entry_time": entry_time_str,
+            "target_timestamp": target_timestamp,
+            "actual_timestamp": candle_at_target['from'],
+            "volume": candle_at_target.get('volume', 0)
         }
-    else:
-        result = {"error": f"ไม่พบแท่งเทียนที่เวลา {target_time_str}"}
+        
+        # ✅ ส่งผลลัพธ์กลับให้ Node.js
+        print(json.dumps(result, ensure_ascii=False))
+        
+    except Exception as e:
+        print(json.dumps({
+            "error": f"❌ เกิดข้อผิดพลาด: {str(e)}"
+        }, ensure_ascii=False))
+        sys.exit(1)
 
-except Exception as e:
-    result = {"error": f"เกิดข้อผิดพลาด: {str(e)}"}
+def calculate_target_time(entry_time_str, round_num):
+    """คำนวณเวลาที่ต้องเช็คแท่งเทียน"""
+    try:
+        # แปลง entry_time_str เป็น datetime
+        # เช่น "13:45" -> datetime object
+        hours, minutes = map(int, entry_time_str.split(':'))
+        
+        now = datetime.now()
+        entry_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+        
+        # ถ้าเวลาเข้าเทรดเลยไปแล้ว ให้ใช้วันถัดไป
+        if entry_time < now:
+            entry_time = entry_time + timedelta(days=1)
+        
+        # คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
+        # รอบ 1 = entry_time + 5 นาที
+        # รอบ 2 = entry_time + 10 นาที
+        # รอบ 3 = entry_time + 15 นาที
+        target_time = entry_time + timedelta(minutes=5 * round_num)
+        
+        # แปลงเป็น timestamp
+        return int(time.mktime(target_time.timetuple()))
+        
+    except Exception as e:
+        print(f"❌ Error calculating target time: {e}", file=sys.stderr)
+        return None
 
-# ✅ ส่งผลลัพธ์กลับให้ Node.js
-print(json.dumps(result, ensure_ascii=False))
+if __name__ == "__main__":
+    main()
