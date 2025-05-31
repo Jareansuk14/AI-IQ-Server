@@ -4,8 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs'); 
 const { connectDB, checkConnection } = require('./config/db');
-const paymentChecker = require('./services/paymentChecker');
-const trackingService = require('./services/trackingService'); // เพิ่มสำหรับระบบติดตาม
+const paymentChecker = require('./services/paymentChecker'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 const app = express();
@@ -270,51 +269,39 @@ app.get('/api/forex/pairs', (req, res) => {
 
 // === เพิ่ม API endpoints สำหรับระบบติดตามผล ===
 
-// API สำหรับดู tracking sessions ทั้งหมด (สำหรับแอดมิน)
+// API สำหรับดูสถานะการติดตามทั้งหมด
 app.get('/api/tracking/sessions', async (req, res) => {
   try {
+    const { status, limit = 20 } = req.query;
     const TrackingSession = require('./models/trackingSession');
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const status = req.query.status; // tracking, won, lost, cancelled
-    const skip = (page - 1) * limit;
     
-    let matchCondition = {};
+    let query = {};
     if (status) {
-      matchCondition.status = status;
+      query.status = status;
     }
     
-    const sessions = await TrackingSession.find(matchCondition)
+    const sessions = await TrackingSession.find(query)
       .populate('user', 'lineUserId displayName')
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      .limit(parseInt(limit));
     
-    const total = await TrackingSession.countDocuments(matchCondition);
-    
-    const formattedSessions = sessions.map(session => ({
-      id: session._id,
-      user: session.user,
-      pair: session.pair,
-      prediction: session.prediction,
-      entryTime: session.entryTime,
-      targetTime: session.targetTime,
-      currentRound: session.currentRound,
-      maxRounds: session.maxRounds,
-      status: session.status,
-      winRound: session.winRound,
-      results: session.results,
-      createdAt: session.createdAt,
-      completedAt: session.completedAt
-    }));
+    const stats = await TrackingSession.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
     
     res.json({
-      sessions: formattedSessions,
-      pagination: {
-        total,
-        page,
-        pages: Math.ceil(total / limit),
-        limit
+      sessions,
+      stats: {
+        total: sessions.length,
+        breakdown: stats.reduce((acc, curr) => {
+          acc[curr._id] = curr.count;
+          return acc;
+        }, {})
       }
     });
   } catch (error) {
@@ -323,114 +310,7 @@ app.get('/api/tracking/sessions', async (req, res) => {
   }
 });
 
-// API สำหรับดูสถิติการติดตาม
-app.get('/api/tracking/stats', async (req, res) => {
-  try {
-    const TrackingSession = require('./models/trackingSession');
-    
-    // สถิติภาพรวม
-    const totalSessions = await TrackingSession.countDocuments();
-    const activeSessions = await TrackingSession.countDocuments({ status: 'tracking' });
-    const wonSessions = await TrackingSession.countDocuments({ status: 'won' });
-    const lostSessions = await TrackingSession.countDocuments({ status: 'lost' });
-    
-    // คำนวณ win rate
-    const completedSessions = wonSessions + lostSessions;
-    const winRate = completedSessions > 0 ? ((wonSessions / completedSessions) * 100).toFixed(2) : 0;
-    
-    // สถิติตามคู่เงิน
-    const pairStats = await TrackingSession.aggregate([
-      {
-        $group: {
-          _id: '$pair',
-          total: { $sum: 1 },
-          won: { $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] } },
-          lost: { $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] } },
-          avgWinRound: { $avg: '$winRound' }
-        }
-      },
-      {
-        $project: {
-          pair: '$_id',
-          total: 1,
-          won: 1,
-          lost: 1,
-          winRate: {
-            $cond: [
-              { $gt: [{ $add: ['$won', '$lost'] }, 0] },
-              { $multiply: [{ $divide: ['$won', { $add: ['$won', '$lost'] }] }, 100] },
-              0
-            ]
-          },
-          avgWinRound: { $round: ['$avgWinRound', 2] }
-        }
-      },
-      { $sort: { total: -1 } }
-    ]);
-    
-    // สถิติตามการทำนาย (CALL vs PUT)
-    const predictionStats = await TrackingSession.aggregate([
-      {
-        $group: {
-          _id: '$prediction',
-          total: { $sum: 1 },
-          won: { $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] } },
-          lost: { $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] } }
-        }
-      },
-      {
-        $project: {
-          prediction: '$_id',
-          total: 1,
-          won: 1,
-          lost: 1,
-          winRate: {
-            $cond: [
-              { $gt: [{ $add: ['$won', '$lost'] }, 0] },
-              { $multiply: [{ $divide: ['$won', { $add: ['$won', '$lost'] }] }, 100] },
-              0
-            ]
-          }
-        }
-      }
-    ]);
-    
-    // สถิติการชนะตามรอบ
-    const roundStats = await TrackingSession.aggregate([
-      { $match: { status: 'won' } },
-      {
-        $group: {
-          _id: '$winRound',
-          count: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-    
-    res.json({
-      overview: {
-        totalSessions,
-        activeSessions,
-        wonSessions,
-        lostSessions,
-        completedSessions,
-        winRate: parseFloat(winRate)
-      },
-      pairStats,
-      predictionStats,
-      roundStats: roundStats.map(r => ({
-        round: r._id,
-        count: r.count,
-        percentage: completedSessions > 0 ? ((r.count / wonSessions) * 100).toFixed(2) : 0
-      }))
-    });
-  } catch (error) {
-    console.error('Error getting tracking stats:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API สำหรับดู session ของผู้ใช้คนใดคนหนึ่ง
+// API สำหรับดูข้อมูลการติดตามของผู้ใช้เฉพาะ
 app.get('/api/tracking/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -438,13 +318,28 @@ app.get('/api/tracking/user/:userId', async (req, res) => {
     
     const sessions = await TrackingSession.find({ lineUserId: userId })
       .sort({ createdAt: -1 })
-      .limit(20);
+      .limit(10);
     
-    const stats = await trackingService.getTrackingStats(userId);
+    const currentTracking = await TrackingSession.findOne({
+      lineUserId: userId,
+      status: 'tracking'
+    });
+    
+    const stats = await TrackingSession.aggregate([
+      { $match: { lineUserId: userId } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          avgRounds: { $avg: '$currentRound' }
+        }
+      }
+    ]);
     
     res.json({
       userId,
-      sessions,
+      currentTracking,
+      recentSessions: sessions,
       stats
     });
   } catch (error) {
@@ -453,7 +348,36 @@ app.get('/api/tracking/user/:userId', async (req, res) => {
   }
 });
 
-// API สำหรับยกเลิก tracking session (สำหรับแอดมิน)
+// API สำหรับทดสอบ IQ Option connection
+app.get('/api/tracking/test-iq', async (req, res) => {
+  try {
+    const iqOptionService = require('./services/iqOptionService');
+    const result = await iqOptionService.testConnection();
+    res.json(result);
+  } catch (error) {
+    console.error('Error testing IQ Option connection:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับทดสอบการดึงข้อมูลแท่งเทียน
+app.get('/api/tracking/test-candle', async (req, res) => {
+  try {
+    const { symbol = 'BTC/USD', time = '09:00', date } = req.query;
+    const iqOptionService = require('./services/iqOptionService');
+    
+    const result = await iqOptionService.getCandleData(symbol, time, date);
+    res.json({
+      request: { symbol, time, date },
+      result
+    });
+  } catch (error) {
+    console.error('Error testing candle data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับยกเลิกการติดตาม (สำหรับแอดมิน)
 app.post('/api/tracking/cancel/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
@@ -465,49 +389,227 @@ app.post('/api/tracking/cancel/:sessionId', async (req, res) => {
     }
     
     if (session.status !== 'tracking') {
-      return res.status(400).json({ error: 'Session is not active' });
+      return res.status(400).json({ error: 'Session is not tracking' });
     }
     
-    // ยกเลิก session
-    const cancelled = await trackingService.cancelTracking(session.lineUserId);
+    session.status = 'cancelled';
+    await session.save();
     
-    if (cancelled) {
-      res.json({ message: 'Session cancelled successfully', sessionId });
-    } else {
-      res.status(400).json({ error: 'Failed to cancel session' });
+    // ยกเลิก scheduled check ถ้ามี
+    const trackingService = require('./services/trackingService');
+    const timeoutId = trackingService.activeChecks.get(sessionId);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      trackingService.activeChecks.delete(sessionId);
     }
+    
+    res.json({
+      message: 'Session cancelled successfully',
+      session
+    });
   } catch (error) {
-    console.error('Error cancelling tracking session:', error);
+    console.error('Error cancelling session:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// API สำหรับทดสอบ candle checker
-app.get('/api/test/candle', async (req, res) => {
+// API สำหรับบังคับเช็คผลทันที (สำหรับ testing)
+app.post('/api/tracking/check/:sessionId', async (req, res) => {
   try {
-    const { symbol, time } = req.query;
+    const { sessionId } = req.params;
+    const TrackingSession = require('./models/trackingSession');
+    const trackingService = require('./services/trackingService');
     
-    if (!symbol || !time) {
+    const session = await TrackingSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    if (session.status !== 'tracking') {
+      return res.status(400).json({ error: 'Session is not tracking' });
+    }
+    
+    // บังคับเช็คผลทันที
+    await trackingService.checkResult(sessionId);
+    
+    // ดึงข้อมูลล่าสุด
+    const updatedSession = await TrackingSession.findById(sessionId);
+    
+    res.json({
+      message: 'Manual check completed',
+      session: updatedSession
+    });
+  } catch (error) {
+    console.error('Error manual checking session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับดูสถิติรวมของระบบติดตาม
+app.get('/api/tracking/stats', async (req, res) => {
+  try {
+    const TrackingSession = require('./models/trackingSession');
+    
+    const totalStats = await TrackingSession.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          avgRounds: { $avg: '$currentRound' }
+        }
+      }
+    ]);
+    
+    const pairStats = await TrackingSession.aggregate([
+      {
+        $group: {
+          _id: '$pair',
+          count: { $sum: 1 },
+          wonCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] }
+          },
+          lostCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'lost'] }, 1, 0] }
+          }
+        }
+      },
+      {
+        $project: {
+          pair: '$_id',
+          count: 1,
+          wonCount: 1,
+          lostCount: 1,
+          winRate: {
+            $cond: [
+              { $gt: [{ $add: ['$wonCount', '$lostCount'] }, 0] },
+              { $multiply: [{ $divide: ['$wonCount', { $add: ['$wonCount', '$lostCount'] }] }, 100] },
+              0
+            ]
+          }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+    
+    const dailyStats = await TrackingSession.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          },
+          count: { $sum: 1 },
+          wonCount: {
+            $sum: { $cond: [{ $eq: ['$status', 'won'] }, 1, 0] }
+          }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    res.json({
+      overview: {
+        total: await TrackingSession.countDocuments(),
+        tracking: await TrackingSession.countDocuments({ status: 'tracking' }),
+        completed: await TrackingSession.countDocuments({ 
+          status: { $in: ['won', 'lost'] } 
+        })
+      },
+      statusBreakdown: totalStats,
+      pairPerformance: pairStats,
+      dailyActivity: dailyStats
+    });
+  } catch (error) {
+    console.error('Error getting tracking stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับ cleanup sessions ที่เก่า
+app.post('/api/tracking/cleanup', async (req, res) => {
+  try {
+    const { days = 30 } = req.body;
+    const TrackingSession = require('./models/trackingSession');
+    
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    
+    const result = await TrackingSession.deleteMany({
+      createdAt: { $lt: cutoffDate },
+      status: { $in: ['cancelled', 'lost', 'won'] }
+    });
+    
+    res.json({
+      message: `Cleaned up ${result.deletedCount} old tracking sessions`,
+      deletedCount: result.deletedCount,
+      cutoffDate
+    });
+  } catch (error) {
+    console.error('Error cleaning up tracking sessions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับดูการติดตามที่กำลังทำงาน
+app.get('/api/tracking/active', async (req, res) => {
+  try {
+    const TrackingSession = require('./models/trackingSession');
+    const activeSessions = await TrackingSession.find({ status: 'tracking' })
+      .populate('user', 'lineUserId displayName')
+      .sort({ createdAt: -1 });
+    
+    res.json({
+      count: activeSessions.length,
+      sessions: activeSessions.map(session => ({
+        id: session._id,
+        user: session.user,
+        pair: session.pair,
+        prediction: session.prediction,
+        entryTime: session.entryTime,
+        currentRound: session.currentRound,
+        maxRounds: session.maxRounds,
+        nextCheckTime: session.getNextCheckTime(),
+        createdAt: session.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Error getting active sessions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API สำหรับจำลองการทำงาน (สำหรับ testing)
+app.post('/api/tracking/simulate', async (req, res) => {
+  try {
+    const { userId, pair, prediction, entryTime } = req.body;
+    
+    if (!userId || !pair || !prediction || !entryTime) {
       return res.status(400).json({ 
-        error: 'Please provide symbol and time parameters',
-        example: '/api/test/candle?symbol=EURUSD&time=13:45'
+        error: 'Missing required fields: userId, pair, prediction, entryTime' 
       });
     }
     
-    const candleChecker = require('./services/candleChecker');
-    const result = await candleChecker.checkCandle(symbol, time);
+    const trackingService = require('./services/trackingService');
+    
+    // สร้าง session จำลอง
+    const session = await trackingService.startTracking(userId, pair, prediction, entryTime);
     
     res.json({
-      success: true,
-      result,
-      timestamp: new Date().toISOString()
+      message: 'Simulation started',
+      session: {
+        id: session._id,
+        pair: session.pair,
+        prediction: session.prediction,
+        entryTime: session.entryTime,
+        status: session.status
+      }
     });
   } catch (error) {
-    console.error('Candle check test error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
+    console.error('Error starting simulation:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -578,27 +680,51 @@ connectDB()
       console.log(`Server running on port ${PORT}`);
       console.log(`AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
       console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
-      console.log(`Tracking system initialized`);
-      
-      // แสดง API endpoints ที่สำคัญ
-      console.log('\n🎯 Available API Endpoints:');
-      console.log('📊 AI-Auto: /api/test/forex?pair=EUR/USD');
-      console.log('🔍 Tracking: /api/tracking/sessions');
-      console.log('📈 Candle Test: /api/test/candle?symbol=EURUSD&time=13:45');
-      console.log('🖼️  Images: /api/images/check');
-      console.log('💰 Payment: /api/payment/pending\n');
+      console.log('Available API endpoints:');
+      console.log('- AI-Auto: /api/test/forex, /api/images/check');
+      console.log('- Tracking: /api/tracking/sessions, /api/tracking/active');
+      console.log('- IQ Option: /api/tracking/test-iq, /api/tracking/test-candle');
     });
   });
 
 // จัดการการปิดโปรแกรมอย่างสะอาด
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
+  
+  // หยุดระบบตรวจสอบการชำระเงิน
   await paymentChecker.stop();
+  
+  // หยุดระบบติดตามผล
+  try {
+    const trackingService = require('./services/trackingService');
+    // ยกเลิก active checks ทั้งหมด
+    for (const [sessionId, timeoutId] of trackingService.activeChecks.entries()) {
+      clearTimeout(timeoutId);
+    }
+    trackingService.activeChecks.clear();
+    console.log('Tracking service stopped');
+  } catch (error) {
+    console.error('Error stopping tracking service:', error);
+  }
+  
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Shutting down gracefully...');
+  
   await paymentChecker.stop();
+  
+  try {
+    const trackingService = require('./services/trackingService');
+    for (const [sessionId, timeoutId] of trackingService.activeChecks.entries()) {
+      clearTimeout(timeoutId);
+    }
+    trackingService.activeChecks.clear();
+    console.log('Tracking service stopped');
+  } catch (error) {
+    console.error('Error stopping tracking service:', error);
+  }
+  
   process.exit(0);
 });

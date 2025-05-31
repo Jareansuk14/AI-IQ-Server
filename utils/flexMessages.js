@@ -1991,10 +1991,10 @@ function calculateNextTimeSlot() {
   });
 }
 
-function createContinueTradeMessage() {
+function createContinueTradingMessage() {
   return {
     type: "flex",
-    altText: "🎯 ต้องการเทรดต่อไหม?",
+    altText: "🎯 เทรดต่อหรือไม่?",
     contents: {
       type: "bubble",
       header: {
@@ -2003,11 +2003,19 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "🎯 ต้องการเทรดต่อไหม?",
+            text: "🎯 AI-Auto Trading",
             weight: "bold",
             color: "#ffffff",
             size: "lg",
             align: "center"
+          },
+          {
+            type: "text",
+            text: "ต้องการเทรดต่อหรือไม่?",
+            color: "#ffffff",
+            size: "md",
+            align: "center",
+            margin: "sm"
           }
         ],
         backgroundColor: "#177ddc",
@@ -2019,9 +2027,9 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "✨ พร้อมสำหรับการวิเคราะห์ครั้งต่อไป",
-            color: "#ffffff",
+            text: "📊 เลือกการดำเนินการต่อไป",
             size: "md",
+            color: "#ffffff",
             align: "center",
             margin: "lg"
           },
@@ -2032,15 +2040,15 @@ function createContinueTradeMessage() {
           },
           {
             type: "text",
-            text: "📈 เลือกคู่เงินใหม่และเริ่มการวิเคราะห์\nหรือหยุดพักและกลับมาใหม่ภายหลัง",
+            text: "คุณสามารถเลือกคู่เงินใหม่เพื่อเทรดต่อ หรือหยุดเทรดได้",
+            size: "xs",
             color: "#8c8c8c",
-            size: "sm",
             wrap: true,
             align: "center",
             margin: "lg"
           }
         ],
-        spacing: "md",
+        spacing: "sm",
         paddingAll: "20px",
         backgroundColor: "#1f1f1f"
       },
@@ -2051,11 +2059,11 @@ function createContinueTradeMessage() {
           {
             type: "button",
             style: "primary",
-            height: "md",
+            height: "sm",
             action: {
               type: "postback",
               label: "🚀 เทรดต่อ",
-              data: "action=continue_trade"
+              data: "action=continue_trading"
             },
             color: "#49aa19"
           },
@@ -2065,10 +2073,79 @@ function createContinueTradeMessage() {
             height: "sm",
             action: {
               type: "postback",
-              label: "🛑 หยุดพัก",
-              data: "action=stop_trade"
+              label: "🛑 หยุดเทรด",
+              data: "action=stop_trading"
             },
             margin: "sm"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
+// เพิ่มฟังก์ชันสำหรับการ์ดแสดงสถานะการติดตาม
+function createTrackingStatusMessage(session) {
+  const statusText = session.status === 'tracking' ? 
+    `🔄 กำลังติดตาม ตา ${session.currentRound}/${session.maxRounds}` :
+    session.status === 'won' ? '🎉 ชนะแล้ว!' : '😔 ไม่ถูกต้อง';
+
+  return {
+    type: "flex",
+    altText: `📊 สถานะ: ${statusText}`,
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "📊 สถานะการติดตาม",
+            weight: "bold",
+            color: "#ffffff",
+            size: "lg",
+            align: "center"
+          }
+        ],
+        backgroundColor: session.status === 'won' ? "#49aa19" : session.status === 'lost' ? "#a61d24" : "#177ddc",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: `${session.pair} ${session.prediction}`,
+            weight: "bold",
+            size: "xl",
+            color: "#ffffff",
+            align: "center"
+          },
+          {
+            type: "text",
+            text: statusText,
+            size: "md",
+            color: "#ffffff",
+            align: "center",
+            margin: "sm"
+          },
+          {
+            type: "separator",
+            margin: "lg",
+            color: "#303030"
+          },
+          {
+            type: "text",
+            text: `เวลาเข้าเทรด: ${session.entryTime}`,
+            size: "sm",
+            color: "#8c8c8c",
+            align: "center",
+            margin: "md"
           }
         ],
         spacing: "sm",
@@ -2086,5 +2163,6 @@ module.exports = {
   createPaymentSuccessMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage  // เพิ่มฟังก์ชันใหม่
+  createContinueTradingMessage,
+  createTrackingStatusMessage
 };
