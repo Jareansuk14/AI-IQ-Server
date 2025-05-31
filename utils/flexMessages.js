@@ -2111,11 +2111,13 @@ function createContinueTradeMessage() {
   };
 }
 
-// สร้างการ์ดเชิญชวน
+// แก้ไข flexMessages.js - ระบบแชร์ที่ถูกต้อง
+
+// สร้างการ์ดเชิญที่จะถูกแชร์ (ไม่มี action share ใน card เอง)
 function createInvitationCard(referralCode, inviterName = 'เพื่อน') {
   return {
     type: "flex",
-    altText: `🎁 คำเชิญจาก ${inviterName} - รับเครดิตฟรี!`,
+    altText: `🎁 ${inviterName} เชิญคุณรับเครดิตฟรี! ใช้รหัส: ${referralCode}`,
     contents: {
       type: "bubble",
       size: "mega",
@@ -2170,7 +2172,7 @@ function createInvitationCard(referralCode, inviterName = 'เพื่อน') 
             contents: [
               {
                 type: "text",
-                text: "🚀 ขอเชิญใช้บริการ AI วิเคราะห์รูปภาพ",
+                text: "🚀 เชิญใช้บริการ AI วิเคราะห์รูปภาพ",
                 weight: "bold",
                 size: "lg",
                 color: "#2c2c2c",
@@ -2242,7 +2244,7 @@ function createInvitationCard(referralCode, inviterName = 'เพื่อน') 
                   },
                   {
                     type: "text",
-                    text: "1️⃣ เพิ่มเพื่อน LINE Bot\n2️⃣ พิมพ์: รหัส:" + referralCode + "\n3️⃣ รับเครดิตฟรี 5 เครดิตทันที!",
+                    text: "1️⃣ กดปุ่ม \"เพิ่มเพื่อน\" ด้านล่าง\n2️⃣ พิมพ์: รหัส:" + referralCode + "\n3️⃣ รับเครดิตฟรี 5 เครดิตทันที!",
                     size: "xs",
                     color: "#666666",
                     wrap: true,
@@ -2282,36 +2284,6 @@ function createInvitationCard(referralCode, inviterName = 'เพื่อน') 
               }
             ],
             margin: "lg"
-          },
-          
-          // คำแนะนำการแชร์
-          {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "text",
-                text: "💡 เมื่อคุณสมัครแล้ว คุณจะได้รหัสแชร์ของคุณเอง!",
-                weight: "bold",
-                size: "xs",
-                color: "#ff6b6b",
-                wrap: true,
-                align: "center"
-              },
-              {
-                type: "text",
-                text: "แชร์ให้เพื่อนแล้วรับ 10 เครดิตฟรีต่อคน!",
-                size: "xs",
-                color: "#666666",
-                wrap: true,
-                align: "center",
-                margin: "xs"
-              }
-            ],
-            backgroundColor: "#fff5f5",
-            cornerRadius: "8px",
-            paddingAll: "12px",
-            margin: "lg"
           }
         ],
         spacing: "sm",
@@ -2327,7 +2299,7 @@ function createInvitationCard(referralCode, inviterName = 'เพื่อน') 
             style: "primary",
             action: {
               type: "uri",
-              label: "🚀 เพิ่มเพื่อน LINE Bot",
+              label: "🤖 เพิ่มเพื่อน AI Bot",
               uri: "https://line.me/R/ti/p/@033mebpp"
             },
             color: "#ff6b6b",
@@ -2335,11 +2307,20 @@ function createInvitationCard(referralCode, inviterName = 'เพื่อน') 
           },
           {
             type: "text",
-            text: "หลังจากเพิ่มเพื่อนแล้ว พิมพ์: รหัส:" + referralCode,
+            text: `หลังจากเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${referralCode}`,
             size: "xs",
             color: "#999999",
             align: "center",
             margin: "sm"
+          },
+          {
+            type: "text",
+            text: "💰 คุณก็สามารถแชร์ต่อเพื่อรับ 10 เครดิตฟรีได้เหมือนกัน!",
+            size: "xs",
+            color: "#4ecdc4",
+            align: "center",
+            margin: "sm",
+            weight: "bold"
           }
         ],
         spacing: "sm",
@@ -2350,7 +2331,7 @@ function createInvitationCard(referralCode, inviterName = 'เพื่อน') 
   };
 }
 
-// สร้างข้อความพร้อม Share Target Picker
+// สร้างข้อความแชร์พร้อม Share Target Picker
 function createShareMessage(referralCode, userName = 'คุณ') {
   return {
     type: "flex",
@@ -2434,8 +2415,8 @@ function createShareMessage(referralCode, userName = 'คุณ') {
             style: "primary",
             action: {
               type: "postback",
-              label: "📤 แชร์ให้เพื่อนใน LINE",
-              data: `action=share_invitation&referral_code=${referralCode}&type=line_share`
+              label: "📤 แชร์การ์ดเชิญใน LINE",
+              data: `action=send_shareable_card&referral_code=${referralCode}&inviter_name=${encodeURIComponent(userName)}`
             },
             color: "#4ecdc4",
             height: "sm"
@@ -2446,7 +2427,7 @@ function createShareMessage(referralCode, userName = 'คุณ') {
             action: {
               type: "postback",
               label: "📋 คัดลอกข้อความเชิญ",
-              data: `action=copy_invitation&referral_code=${referralCode}`
+              data: `action=copy_invitation_text&referral_code=${referralCode}&inviter_name=${encodeURIComponent(userName)}`
             },
             height: "sm",
             margin: "sm"
@@ -2468,6 +2449,22 @@ function createShareMessage(referralCode, userName = 'คุณ') {
   };
 }
 
+// สร้าง Share Target Picker Message สำหรับส่งการ์ด
+function createShareTargetMessage(referralCode, inviterName) {
+  const invitationCard = createInvitationCard(referralCode, inviterName);
+  
+  return {
+    type: "flex",
+    altText: `🎁 ${inviterName} เชิญคุณรับเครดิตฟรี! ใช้รหัส: ${referralCode}`,
+    contents: invitationCard.contents,
+    // ใช้ share action เพื่อเปิด Share Target Picker
+    action: {
+      type: "postback",
+      data: `action=share_to_friend&referral_code=${referralCode}&inviter_name=${encodeURIComponent(inviterName)}`
+    }
+  };
+}
+
 // อัปเดต module.exports
 module.exports = {
   createCreditPackagesMessage,
@@ -2476,6 +2473,7 @@ module.exports = {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  createInvitationCard,        // ← เพิ่มใหม่
-  createShareMessage           // ← เพิ่มใหม่
+  createInvitationCard,
+  createShareMessage,
+  createShareTargetMessage    // ← เพิ่มใหม่
 };
