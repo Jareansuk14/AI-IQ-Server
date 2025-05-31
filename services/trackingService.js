@@ -1,7 +1,5 @@
-//AI-Server/services/trackingService.js - แก้ไข error User ObjectId
-
+//AI-Server/services/trackingService.js
 const TrackingSession = require('../models/trackingSession');
-const User = require('../models/user'); // เพิ่มบรรทัดนี้
 const iqOptionService = require('./iqOptionService');
 const lineService = require('./lineService');
 const { createTrackingResultMessage, createContinueTradingMessage } = require('../utils/flexMessages');
@@ -11,7 +9,7 @@ class TrackingService {
     this.activeChecks = new Map(); // เก็บ setTimeout IDs
   }
 
-  // เริ่มติดตามผลการเทรด (แก้ไขเพื่อดึง User ObjectId)
+  // เริ่มติดตามผลการเทรด
   async startTracking(userId, pair, prediction, entryTime) {
     try {
       console.log(`🎯 Starting tracking for ${userId}: ${pair} ${prediction} at ${entryTime}`);
@@ -26,15 +24,8 @@ class TrackingService {
         throw new Error('คุณมีการติดตามผลอยู่แล้ว กรุณารอจนกว่าจะเสร็จสิ้น');
       }
 
-      // ดึงข้อมูล User จาก lineUserId เพื่อเอา ObjectId
-      const user = await User.findOne({ lineUserId: userId });
-      if (!user) {
-        throw new Error('ไม่พบข้อมูลผู้ใช้');
-      }
-
-      // สร้าง tracking session ใหม่ (เพิ่ม user ObjectId)
+      // สร้าง tracking session ใหม่
       const session = new TrackingSession({
-        user: user._id,  // เพิ่มบรรทัดนี้
         lineUserId: userId,
         pair,
         prediction,
@@ -60,19 +51,34 @@ class TrackingService {
     }
   }
 
-  // ตั้งเวลาเช็คผลครั้งถัดไป
+  // ตั้งเวลาเช็คผลครั้งถัดไป (แก้ไขแล้ว)
   scheduleNextCheck(session) {
     const nextCheckTime = session.getNextCheckTime();
     const now = new Date();
+    
+    // แปลงเวลาเช็คจาก string เป็น Date object
     const [hours, minutes] = nextCheckTime.split(':').map(Number);
     
     const checkDate = new Date(session.entryDate);
     checkDate.setHours(hours, minutes, 0, 0);
     
-    // ถ้าเวลาที่จะเช็คผ่านไปแล้ว ให้เช็คทันที (เพิ่ม minimum delay 10 วินาที)
-    const delay = Math.max(10000, checkDate.getTime() - now.getTime()); // อย่างน้อย 10 วินาที
+    // ถ้าเวลาที่จะเช็คผ่านไปแล้วในวันเดียวกัน ให้เช็คทันที
+    let delay;
+    if (checkDate <= now) {
+      // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันทีใน 5 วินาที
+      delay = 5000;
+      console.log(`⚠️ Check time ${nextCheckTime} has passed, checking in 5 seconds`);
+    } else {
+      delay = checkDate.getTime() - now.getTime();
+    }
     
-    console.log(`⏰ Next check scheduled for ${nextCheckTime} (in ${delay/1000} seconds)`);
+    // จำกัดเวลารอสูงสุด 1 ชั่วโมง (เผื่อมีปัญหาการคำนวณ)
+    if (delay > 60 * 60 * 1000) {
+      delay = 5000; // เช็คทันทีใน 5 วินาทีแทน
+      console.log(`⚠️ Delay too long (${delay/1000}s), checking immediately`);
+    }
+    
+    console.log(`⏰ Next check scheduled for ${nextCheckTime} (in ${(delay/1000).toFixed(1)} seconds)`);
     
     const timeoutId = setTimeout(() => {
       this.checkResult(session._id);
@@ -258,6 +264,130 @@ class TrackingService {
       cancelled: stats.find(s => s._id === 'cancelled')?.count || 0,
       tracking: stats.find(s => s._id === 'tracking')?.count || 0
     };
+  }
+
+  // ทำความสะอาด sessions ที่เก่า
+  async cleanupOldSessions(days = 7) {
+    try {
+      const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      
+      const result = await TrackingSession.deleteMany({
+        createdAt: { $lt: cutoffDate },
+        status: { $in: ['won', 'lost', 'cancelled'] }
+      });
+
+      console.log(`Cleaned up ${result.deletedCount} old tracking sessions`);
+      return result.deletedCount;
+    } catch (error) {
+      console.error('Error cleaning up old sessions:', error);
+      throw error;
+    }
+  }
+
+  // หยุดการทำงานของ service
+  async stop() {
+    // ยกเลิก timeout ทั้งหมด
+    for (const [sessionId, timeoutId] of this.activeChecks) {
+      clearTimeout(timeoutId);
+      console.log(`Cancelled timeout for session ${sessionId}`);
+    }
+    this.activeChecks.clear();
+    console.log('TrackingService stopped');
+  }
+
+  // เริ่มต้นการทำงานของ service
+  async start() {
+    console.log('TrackingService starting...');
+    
+    // ตรวจหา sessions ที่ค้างอยู่และกู้คืน
+    const pendingSessions = await TrackingSession.find({ status: 'tracking' });
+    
+    for (const session of pendingSessions) {
+      const now = new Date();
+      const sessionAge = now.getTime() - session.createdAt.getTime();
+      
+      // ถ้า session เก่ากว่า 2 ชั่วโมง ให้ยกเลิก
+      if (sessionAge > 2 * 60 * 60 * 1000) {
+        console.log(`Cancelling old session ${session._id} (${sessionAge/1000/60} minutes old)`);
+        session.status = 'cancelled';
+        await session.save();
+      } else {
+        // กู้คืนการติดตาม
+        console.log(`Recovering tracking session ${session._id} for ${session.lineUserId}`);
+        this.scheduleNextCheck(session);
+      }
+    }
+    
+    console.log(`TrackingService started. Recovered ${this.activeChecks.size} active sessions.`);
+  }
+
+  // ดูสถานะ active checks ปัจจุบัน
+  getActiveChecks() {
+    return {
+      count: this.activeChecks.size,
+      sessions: Array.from(this.activeChecks.keys())
+    };
+  }
+
+  // บังคับเช็คผลทันที (สำหรับ testing)
+  async forceCheck(sessionId) {
+    try {
+      // ยกเลิก timeout เดิม
+      const timeoutId = this.activeChecks.get(sessionId.toString());
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        this.activeChecks.delete(sessionId.toString());
+      }
+      
+      // เช็คทันที
+      await this.checkResult(sessionId);
+      
+      return { success: true, message: 'Force check completed' };
+    } catch (error) {
+      console.error('Error force checking:', error);
+      throw error;
+    }
+  }
+
+  // ดึงข้อมูล session ปัจจุบันของผู้ใช้
+  async getCurrentSession(userId) {
+    return await TrackingSession.findOne({
+      lineUserId: userId,
+      status: 'tracking'
+    });
+  }
+
+  // อัปเดตสถานะ session
+  async updateSessionStatus(sessionId, status, additionalData = {}) {
+    try {
+      const session = await TrackingSession.findById(sessionId);
+      if (!session) {
+        throw new Error('Session not found');
+      }
+
+      session.status = status;
+      
+      // เพิ่มข้อมูลเพิ่มเติม
+      if (status === 'won') {
+        session.wonAt = additionalData.wonAt || new Date();
+      } else if (status === 'lost') {
+        session.lostAt = additionalData.lostAt || new Date();
+      }
+
+      await session.save();
+      
+      // ยกเลิก active check ถ้ามี
+      const timeoutId = this.activeChecks.get(sessionId.toString());
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        this.activeChecks.delete(sessionId.toString());
+      }
+
+      return session;
+    } catch (error) {
+      console.error('Error updating session status:', error);
+      throw error;
+    }
   }
 }
 
