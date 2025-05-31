@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 # AI-Server/scripts/yahoo_candle_checker.py
 import sys
+import os
 import io
 import json
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
+
+# เพิ่ม path ของ scripts folder เพื่อใช้ pytz local
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pytz
 
 # ทำให้รองรับ utf-8 บน Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -29,17 +34,20 @@ def main():
         yahoo_symbol = convert_to_yahoo_symbol(symbol)
         print(f"Debug: Yahoo symbol: {yahoo_symbol}", file=sys.stderr)
         
-        # แปลง target datetime string เป็น datetime object ในเขตเวลาไทย
-        thai_dt = datetime.strptime(target_datetime_str, "%Y-%m-%d %H:%M")
+        # ตั้งค่า timezone
+        thai_tz = pytz.timezone("Asia/Bangkok")
         
-        # แปลงเป็น UTC (Bangkok = UTC+7, ลบ 7 ชั่วโมง)
-        utc_dt = thai_dt - timedelta(hours=7)
+        # แปลง target datetime string เป็น datetime object ในเขตเวลาไทย
+        thai_dt = thai_tz.localize(datetime.strptime(target_datetime_str, "%Y-%m-%d %H:%M"))
+        
+        # แปลงเป็น UTC
+        utc_dt = thai_dt.astimezone(pytz.utc)
         
         print(f"Debug: Thai time: {thai_dt}", file=sys.stderr)
         print(f"Debug: UTC time: {utc_dt}", file=sys.stderr)
         
         # ดึงข้อมูลจาก Yahoo Finance
-        candle_data = get_yahoo_candle_data(yahoo_symbol, utc_dt)
+        candle_data = get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz)
         
         if candle_data is None:
             print(json.dumps({
@@ -148,13 +156,13 @@ def convert_to_yahoo_symbol(symbol):
         # ถ้าไม่พบ ลองใช้ตัวเดิม
         return symbol
 
-def get_yahoo_candle_data(yahoo_symbol, utc_dt):
+def get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz):
     """ดึงข้อมูลแท่งเทียนจาก Yahoo Finance ด้วย HTTP API"""
     try:
         print(f"Debug: Fetching data for {yahoo_symbol}", file=sys.stderr)
         
-        # คำนวณ UTC timestamp
-        target_timestamp = int(time.mktime(utc_dt.timetuple()))
+        # คำนวณช่วงเวลาสำหรับดึงข้อมูล (UTC timestamps)
+        target_timestamp = int(utc_dt.timestamp())
         
         # ขยายช่วงเวลาออกไป เพื่อให้แน่ใจว่าได้ข้อมูล
         end_time = target_timestamp + (3600 * 12)  # +12 ชั่วโมง
@@ -220,10 +228,10 @@ def get_yahoo_candle_data(yahoo_symbol, utc_dt):
         
         print(f"Debug: Found closest candle at index {closest_index}, diff: {min_diff} seconds", file=sys.stderr)
         
-        # แปลงเวลากลับเป็น timezone ไทย (UTC + 7 ชั่วโมง)
+        # แปลงเวลากลับเป็น timezone ไทย
         candle_timestamp = timestamps[closest_index]
-        candle_utc = datetime.fromtimestamp(candle_timestamp)
-        candle_thai = candle_utc + timedelta(hours=7)
+        candle_utc = datetime.fromtimestamp(candle_timestamp, tz=pytz.utc)
+        candle_thai = candle_utc.astimezone(thai_tz)
         
         print(f"Debug: Candle time (Thai): {candle_thai.strftime('%Y-%m-%d %H:%M')}", file=sys.stderr)
         
