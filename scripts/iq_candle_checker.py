@@ -14,6 +14,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # 🔐 ใส่ข้อมูลบัญชีของคุณที่นี่ (ใช้ Environment Variables)
 USERNAME = os.getenv('IQ_USERNAME', 'gerbera.ville@gmail.com')
 PASSWORD = os.getenv('IQ_PASSWORD', 'Thefinal14')
+
 def main():
     try:
         # รับ parameters จาก Node.js
@@ -49,6 +50,10 @@ def main():
                 sys.exit(1)
             
             print(f"Debug: Successfully connected to IQ Option!", file=sys.stderr)
+            
+            # 🎯 เปลี่ยนเป็น Demo Account
+            I_want_money.change_balance("PRACTICE")
+            print(f"Debug: Switched to PRACTICE account", file=sys.stderr)
             
         except Exception as conn_error:
             print(f"Debug: Connection exception: {str(conn_error)}", file=sys.stderr)
