@@ -17,7 +17,7 @@ class IQOptionService {
         const iqPair = this.convertPairToIQFormat(pair);
         
         // สร้างคำสั่ง Python พร้อม parameters
-        const command = `python3 "${this.pythonScriptPath}" "${iqPair}" "${entryTime}" ${round}`;
+        const command = `python "${this.pythonScriptPath}" "${iqPair}" "${entryTime}" ${round}`;
         
         console.log(`🔧 Command: ${command}`);
 
