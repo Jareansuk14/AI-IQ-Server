@@ -65,35 +65,18 @@ class ResultTrackingService {
   // คำนวณเวลาที่ต้องเช็คผล (ปรับปรุงใหม่)
   calculateCheckTime(entryTimeStr, round) {
     try {
-      // แปลง entryTimeStr เป็น full datetime ในเขตเวลาไทย
-      const [hours, minutes] = entryTimeStr.split(':').map(Number);
-      
       const now = new Date();
-      const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
       
-      // สร้างเวลาเข้าเทรดในเขตเวลาไทย
-      let entryTime = new Date(bangkokTime);
-      entryTime.setHours(hours, minutes, 0, 0);
+      // สำหรับรอบแรก: ใช้เวลาปัจจุบัน + 5 นาที
+      // สำหรับรอบถัดไป: ใช้เวลาปัจจุบัน + (5 * รอบ) นาที
+      const delayMinutes = 5 * round;
+      const checkTime = new Date(now.getTime() + (delayMinutes * 60 * 1000));
       
-      // ถ้าเวลาเข้าเทรดยังไม่ถึง ให้ใช้วันถัดไป
-      if (entryTime <= bangkokTime) {
-        // สำหรับรอบแรก ถ้าเวลาเลยไปแล้ว ให้ใช้วันถัดไป
-        if (round === 1) {
-          entryTime.setDate(entryTime.getDate() + 1);
-        }
-      }
-      
-      // คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ (เพิ่ม 5 นาที * รอบ)
-      const checkTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
-      
-      // แปลงกลับเป็น UTC สำหรับ JavaScript timeout
-      const utcCheckTime = new Date(checkTime.getTime() - (7 * 60 * 60 * 1000)); // ลบ 7 ชั่วโมง (UTC offset)
-      
-      console.log(`🕐 Entry time (Bangkok): ${entryTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+      console.log(`🕐 Current time: ${now.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
       console.log(`🎯 Check time (Bangkok): ${checkTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
-      console.log(`🌍 Check time (UTC): ${utcCheckTime.toISOString()}`);
+      console.log(`⏱️ Delay: ${delayMinutes} minutes`);
       
-      return utcCheckTime;
+      return checkTime;
       
     } catch (error) {
       console.error('Error calculating check time:', error);
@@ -174,29 +157,21 @@ class ResultTrackingService {
   // สร้าง target datetime string สำหรับ Python script
   createTargetDateTime(entryTimeStr, round) {
     try {
-      const [hours, minutes] = entryTimeStr.split(':').map(Number);
-      
       const now = new Date();
-      const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
       
-      // สร้างเวลาเข้าเทรดในเขตเวลาไทย
-      let entryTime = new Date(bangkokTime);
-      entryTime.setHours(hours, minutes, 0, 0);
+      // สำหรับการเช็คผล: ใช้เวลาปัจจุบัน + (5 * รอบ) นาที
+      const delayMinutes = 5 * round;
+      const targetTime = new Date(now.getTime() + (delayMinutes * 60 * 1000));
       
-      // ถ้าเวลาเข้าเทรดยังไม่ถึง ให้ใช้วันถัดไป
-      if (entryTime <= bangkokTime && round === 1) {
-        entryTime.setDate(entryTime.getDate() + 1);
-      }
-      
-      // คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
-      const targetTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
+      // แปลงเป็นเวลาไทย
+      const bangkokTime = new Date(targetTime.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
       
       // Format เป็น string ในรูปแบบ "YYYY-MM-DD HH:MM"
-      const year = targetTime.getFullYear();
-      const month = String(targetTime.getMonth() + 1).padStart(2, '0');
-      const day = String(targetTime.getDate()).padStart(2, '0');
-      const hour = String(targetTime.getHours()).padStart(2, '0');
-      const minute = String(targetTime.getMinutes()).padStart(2, '0');
+      const year = bangkokTime.getFullYear();
+      const month = String(bangkokTime.getMonth() + 1).padStart(2, '0');
+      const day = String(bangkokTime.getDate()).padStart(2, '0');
+      const hour = String(bangkokTime.getHours()).padStart(2, '0');
+      const minute = String(bangkokTime.getMinutes()).padStart(2, '0');
       
       const targetDateTime = `${year}-${month}-${day} ${hour}:${minute}`;
       
@@ -206,9 +181,10 @@ class ResultTrackingService {
       
     } catch (error) {
       console.error('Error creating target datetime:', error);
-      // Fallback
+      // Fallback: ใช้เวลาปัจจุบัน
       const now = new Date();
-      return now.toISOString().slice(0, 16).replace('T', ' ');
+      const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      return bangkokTime.toISOString().slice(0, 16).replace('T', ' ');
     }
   }
 
