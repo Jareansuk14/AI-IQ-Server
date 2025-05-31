@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # 🔐 ใส่ข้อมูลบัญชีของคุณที่นี่
-USERNAME = "your_email@example.com"
-PASSWORD = "your_password"
+USERNAME = "gerbera.ville@gmail.com"
+PASSWORD = "Thefinal14"
 
 def main():
     try:
