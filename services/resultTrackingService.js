@@ -1,4 +1,4 @@
-//AI-Server/services/resultTrackingService.js - แก้ไขการคำนวณเวลาแล้ว
+//AI-Server/services/resultTrackingService.js
 const lineService = require('./lineService');
 const iqOptionService = require('./iqOptionService');
 const { createContinueTradeMessage } = require('../utils/flexMessages');
@@ -14,10 +14,10 @@ class ResultTrackingService {
     try {
       console.log(`🎯 Starting result tracking for user ${userId}`);
       console.log(`📊 ${pair} ${prediction} at ${entryTime}`);
-
+  
       // Block user จากการใช้คำสั่งอื่น
       this.blockedUsers.add(userId);
-
+  
       // สร้าง tracking session
       const session = {
         userId,
@@ -28,30 +28,52 @@ class ResultTrackingService {
         maxRounds: 7,
         isActive: true,
         startedAt: new Date(),
-        actualEntryTime: this.parseEntryTime(entryTime), // เก็บเวลาเข้าเทรดจริง
         results: []
       };
-
+  
       this.trackingSessions.set(userId, session);
-
+  
       // ส่งข้อความแจ้งว่ากำลังติดตามผล
       await lineService.pushMessage(userId, {
         type: 'text',
         text: `🔍 กำลังติดตามผล ${pair}\n\n📊 คาดการณ์: ${prediction}\n⏰ เข้าเทรดตอน: ${entryTime}\n🎯 รอบที่: 1/7\n\n⏳ รอจนถึงเวลาปิดแท่งเทียน...`
       });
-
+  
       // คำนวณเวลาที่ต้องเช็คผล
-      const checkTime = this.calculateCorrectCheckTime(session.actualEntryTime, 1);
+      const checkTime = this.calculateCheckTime(entryTime, 1);
       const delayMs = checkTime.getTime() - Date.now();
-
+  
       console.log(`⏰ Will check result at: ${checkTime.toISOString()}`);
       console.log(`⏱️ Delay: ${Math.round(delayMs / 1000)} seconds (${Math.round(delayMs / 60000)} minutes)`);
-
+  
+      // ตรวจสอบว่า delay สมเหตุสมผลหรือไม่
+      if (delayMs < 0) {
+        console.log(`⚠️ Warning: Negative delay detected. Using minimum delay of 30 seconds.`);
+        delayMs = 30000; // ใช้ 30 วินาทีเป็นค่าต่ำสุด
+      }
+  
+      if (delayMs > 24 * 60 * 60 * 1000) { // มากกว่า 24 ชั่วโมง
+        console.log(`⚠️ Warning: Delay too long (${Math.round(delayMs / 3600000)} hours). Using maximum delay of 24 hours.`);
+        delayMs = 24 * 60 * 60 * 1000; // ใช้ 24 ชั่วโมงเป็นค่าสูงสุด
+      }
+  
+      // ส่งข้อความบอกเวลาที่จะเช็ค
+      const checkTimeDisplay = checkTime.toLocaleString('th-TH', { 
+        timeZone: 'Asia/Bangkok',
+        hour: '2-digit', 
+        minute: '2-digit'
+      });
+      
+      await lineService.pushMessage(userId, {
+        type: 'text',
+        text: `⏰ จะเช็คผลรอบที่ 1 ตอนเวลา ${checkTimeDisplay}\n⏳ รอประมาณ ${Math.round(delayMs / 60000)} นาที`
+      });
+  
       // ตั้ง timeout เพื่อเช็คผลครั้งแรก
       setTimeout(() => {
         this.checkResult(userId);
       }, delayMs);
-
+  
       return true;
     } catch (error) {
       console.error('Error starting tracking:', error);
@@ -62,35 +84,50 @@ class ResultTrackingService {
     }
   }
 
-  // แปลงเวลาเข้าเทรดเป็น Date object
-  parseEntryTime(entryTimeStr) {
-    const [hours, minutes] = entryTimeStr.split(':').map(Number);
-    const entryTime = new Date();
-    entryTime.setHours(hours, minutes, 0, 0);
-    
-    // ถ้าเวลาเข้าเทรดผ่านไปแล้วในวันนี้ ให้ใช้เวลาปัจจุบัน + 1 นาที
-    const now = new Date();
-    if (entryTime <= now) {
-      console.log(`⚠️ Entry time ${entryTimeStr} has passed, using current time + 1 minute`);
-      return new Date(now.getTime() + 60000); // เพิ่ม 1 นาที
+  // คำนวณเวลาที่ต้องเช็คผล
+  calculateCheckTime(entryTimeStr, round) {
+    try {
+      // entryTimeStr = "17:45"
+      const [hours, minutes] = entryTimeStr.split(':').map(Number);
+      
+      const now = new Date();
+      let entryTime = new Date();
+      entryTime.setHours(hours, minutes, 0, 0);
+      
+      console.log(`📅 Calculating check time for ${entryTimeStr}, round ${round}`);
+      console.log(`🕐 Current time: ${now.toISOString()}`);
+      console.log(`🎯 Entry time: ${entryTime.toISOString()}`);
+      
+      // ถ้าเวลาเข้าเทรดเลยไปแล้ว (สำหรับรอบที่ 1)
+      if (round === 1 && entryTime < now) {
+        // ใช้วันถัดไป
+        entryTime.setDate(entryTime.getDate() + 1);
+        console.log(`⏭️ Entry time moved to next day: ${entryTime.toISOString()}`);
+      }
+      
+      // คำนวณเวลาเช็คผล
+      let checkTime;
+      
+      if (round === 1) {
+        // รอบแรก: รอให้ถึงเวลาเข้าเทรดก่อน แล้วค่อยนับ 300 วินาที
+        checkTime = new Date(entryTime.getTime() + (5 * 60 * 1000)); // +5 นาที
+      } else {
+        // รอบ 2-7: นับต่อเนื่องจากเวลาเข้าเทรด
+        checkTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
+      }
+      
+      console.log(`⏰ Check time for round ${round}: ${checkTime.toISOString()}`);
+      
+      // คำนวณ delay จากเวลาปัจจุบัน
+      const delayMs = checkTime.getTime() - now.getTime();
+      console.log(`⏱️ Delay: ${Math.round(delayMs / 1000)} seconds (${Math.round(delayMs / 60000)} minutes)`);
+      
+      return checkTime;
+    } catch (error) {
+      console.error(`❌ Error calculating check time: ${error.message}`);
+      // Return default time (5 minutes from now)
+      return new Date(Date.now() + 5 * 60 * 1000);
     }
-    
-    return entryTime;
-  }
-
-  // คำนวณเวลาที่ต้องเช็คผล (แก้ไขแล้ว)
-  calculateCorrectCheckTime(actualEntryTime, round) {
-    // เช็คผลหลังจากเวลาเข้าเทรด + (5 * round) นาที
-    const checkTime = new Date(actualEntryTime.getTime() + (5 * 60 * 1000 * round));
-    
-    // ถ้าเวลาเช็คผลอยู่ในอดีต ให้เช็คในอีก 30 วินาที
-    const now = new Date();
-    if (checkTime <= now) {
-      console.log(`⚠️ Check time is in the past, checking in 30 seconds`);
-      return new Date(now.getTime() + 30000);
-    }
-    
-    return checkTime;
   }
 
   // เช็คผลจาก IQ Option
@@ -219,17 +256,10 @@ class ResultTrackingService {
         text: `❌ รอบที่ ${session.round - 1}: ไม่ถูกต้อง\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n🔄 ทำต่อรอบที่ ${session.round}/${session.maxRounds}\n⏳ รอแท่งเทียนถัดไป...`
       });
 
-      // คำนวณเวลาสำหรับรอบถัดไป
-      const nextCheckTime = this.calculateCorrectCheckTime(session.actualEntryTime, session.round);
-      const delayMs = nextCheckTime.getTime() - Date.now();
-
-      console.log(`⏰ Next check at: ${nextCheckTime.toISOString()}`);
-      console.log(`⏱️ Delay: ${Math.round(delayMs / 1000)} seconds`);
-
-      // ตั้งเวลาสำหรับเช็ครอบถัดไป
+      // ตั้งเวลาสำหรับเช็ครอบถัดไป (อีก 5 นาที)
       setTimeout(() => {
         this.checkResult(userId);
-      }, delayMs);
+      }, 5 * 60 * 1000); // 300 วินาที
 
     } catch (error) {
       console.error('Error handling lose:', error);
@@ -296,8 +326,7 @@ class ResultTrackingService {
         prediction: session.prediction,
         round: session.round,
         isActive: session.isActive,
-        startedAt: session.startedAt,
-        actualEntryTime: session.actualEntryTime
+        startedAt: session.startedAt
       }))
     };
   }
