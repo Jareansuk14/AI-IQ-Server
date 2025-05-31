@@ -1994,7 +1994,7 @@ function calculateNextTimeSlot() {
 function createContinueTradeMessage() {
   return {
     type: "flex",
-    altText: "🎯 เทรดต่อไหม?",
+    altText: "🎯 ต้องการเทรดต่อไหม?",
     contents: {
       type: "bubble",
       header: {
@@ -2003,19 +2003,11 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "🎯 AI-Auto Trading",
+            text: "🎯 ต้องการเทรดต่อไหม?",
             weight: "bold",
             color: "#ffffff",
             size: "lg",
             align: "center"
-          },
-          {
-            type: "text",
-            text: "ต้องการเทรดต่อไหม?",
-            color: "#ffffff",
-            size: "md",
-            align: "center",
-            margin: "sm"
           }
         ],
         backgroundColor: "#177ddc",
@@ -2027,8 +2019,9 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "📈",
-            size: "xxl",
+            text: "✨ พร้อมสำหรับการวิเคราะห์ครั้งต่อไป",
+            color: "#ffffff",
+            size: "md",
             align: "center",
             margin: "lg"
           },
@@ -2039,24 +2032,15 @@ function createContinueTradeMessage() {
           },
           {
             type: "text",
-            text: "เลือกการกระทำของคุณ:",
-            color: "#ffffff",
-            size: "md",
-            align: "center",
-            margin: "lg",
-            weight: "bold"
-          },
-          {
-            type: "text",
-            text: "• ใช่ - เลือกคู่เงินใหม่\n• ไม่ - จบการเทรดวันนี้",
+            text: "📈 เลือกคู่เงินใหม่และเริ่มการวิเคราะห์\nหรือหยุดพักและกลับมาใหม่ภายหลัง",
             color: "#8c8c8c",
             size: "sm",
             wrap: true,
             align: "center",
-            margin: "md"
+            margin: "lg"
           }
         ],
-        spacing: "sm",
+        spacing: "md",
         paddingAll: "20px",
         backgroundColor: "#1f1f1f"
       },
@@ -2070,8 +2054,8 @@ function createContinueTradeMessage() {
             height: "md",
             action: {
               type: "postback",
-              label: "✅ ใช่ เทรดต่อ",
-              data: "action=continue_trade&choice=yes"
+              label: "🚀 เทรดต่อ",
+              data: "action=continue_trade"
             },
             color: "#49aa19"
           },
@@ -2081,8 +2065,8 @@ function createContinueTradeMessage() {
             height: "sm",
             action: {
               type: "postback",
-              label: "❌ ไม่ จบการเทรด",
-              data: "action=continue_trade&choice=no"
+              label: "🛑 หยุดพัก",
+              data: "action=stop_trade"
             },
             margin: "sm"
           }
@@ -2102,5 +2086,5 @@ module.exports = {
   createPaymentSuccessMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage  // เพิ่มบรรทัดนี้
+  createContinueTradeMessage  // เพิ่มฟังก์ชันใหม่
 };
