@@ -4,7 +4,8 @@ import sys
 import io
 import json
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime
+import pytz
 import time
 
 # ทำให้รองรับ utf-8 บน Windows
@@ -15,44 +16,34 @@ def main():
         # รับ parameters จาก Node.js
         if len(sys.argv) < 4:
             print(json.dumps({
-                "error": "❌ ต้องระบุ parameters: symbol entryTime round [expectedTimestamp]"
+                "error": "❌ ต้องระบุ parameters: symbol targetDateTime round"
             }, ensure_ascii=False))
             sys.exit(1)
         
-        symbol = sys.argv[1]  # เช่น "EURUSD"
-        entry_time_str = sys.argv[2]  # เช่น "13:45"
+        symbol = sys.argv[1]  # เช่น "EUR/USD"
+        target_datetime_str = sys.argv[2]  # เช่น "2025-05-31 23:05"
         round_num = int(sys.argv[3])  # เช่น 1
-        expected_timestamp = None
         
-        # รับ expected timestamp ถ้ามีการส่งมา (optional parameter)
-        if len(sys.argv) >= 5:
-            try:
-                expected_timestamp = int(sys.argv[4])
-                print(f"Debug: Expected timestamp received: {expected_timestamp}", file=sys.stderr)
-            except ValueError:
-                print(f"Debug: Invalid expected timestamp: {sys.argv[4]}", file=sys.stderr)
-        
-        print(f"Debug: Yahoo Finance API - Symbol: {symbol}, Entry: {entry_time_str}, Round: {round_num}", file=sys.stderr)
+        print(f"Debug: Yahoo Finance API - Symbol: {symbol}, Target: {target_datetime_str}, Round: {round_num}", file=sys.stderr)
         
         # แปลง symbol เป็น Yahoo Finance format
         yahoo_symbol = convert_to_yahoo_symbol(symbol)
         print(f"Debug: Yahoo symbol: {yahoo_symbol}", file=sys.stderr)
         
-        # คำนวณ timestamp สำหรับรอบนั้นๆ
-        target_timestamp = calculate_target_time(entry_time_str, round_num)
-        if target_timestamp is None:
-            print(json.dumps({
-                "error": "❌ ไม่สามารถคำนวณเวลาได้"
-            }, ensure_ascii=False))
-            sys.exit(1)
+        # ตั้งค่า timezone
+        thai_tz = pytz.timezone("Asia/Bangkok")
         
-        print(f"Debug: Calculated target timestamp: {target_timestamp}", file=sys.stderr)
-        if expected_timestamp:
-            print(f"Debug: Expected timestamp: {expected_timestamp}", file=sys.stderr)
-            print(f"Debug: Timestamp difference: {abs(target_timestamp - expected_timestamp)} seconds", file=sys.stderr)
+        # แปลง target datetime string เป็น datetime object ในเขตเวลาไทย
+        thai_dt = thai_tz.localize(datetime.strptime(target_datetime_str, "%Y-%m-%d %H:%M"))
+        
+        # แปลงเป็น UTC
+        utc_dt = thai_dt.astimezone(pytz.utc)
+        
+        print(f"Debug: Thai time: {thai_dt}", file=sys.stderr)
+        print(f"Debug: UTC time: {utc_dt}", file=sys.stderr)
         
         # ดึงข้อมูลจาก Yahoo Finance
-        candle_data = get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp)
+        candle_data = get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz)
         
         if candle_data is None:
             print(json.dumps({
@@ -61,8 +52,8 @@ def main():
             sys.exit(1)
         
         # วิเคราะห์สีแท่งเทียน
-        open_price = candle_data['open']
-        close_price = candle_data['close']
+        open_price = float(candle_data['open'])
+        close_price = float(candle_data['close'])
         
         print(f"Debug: Open: {open_price}, Close: {close_price}", file=sys.stderr)
         
@@ -76,33 +67,24 @@ def main():
         
         print(f"Debug: Candle color: {color}", file=sys.stderr)
         
-        # สร้าง timestamp แสดงผล
-        candle_time = datetime.fromtimestamp(candle_data['timestamp'])
-        display_time = candle_time.strftime("%H:%M")
-        
-        # คำนวณความแม่นยำของเวลา
-        time_accuracy = calculate_time_accuracy(candle_data['timestamp'], expected_timestamp or target_timestamp)
+        # สร้าง timestamp แสดงผล (เวลาไทย)
+        candle_time_thai = candle_data['thai_time']
         
         result = {
             "symbol": symbol,
-            "time": display_time,
+            "time": candle_time_thai,
             "candle_size": "5min",
             "open": round(open_price, 5),
             "close": round(close_price, 5),
             "color": color,
             "round": round_num,
-            "entry_time": entry_time_str,
-            "target_timestamp": target_timestamp,
-            "expected_timestamp": expected_timestamp,
-            "actual_timestamp": candle_data['timestamp'],
-            "time_accuracy": time_accuracy,
+            "target_datetime": target_datetime_str,
+            "utc_datetime": utc_dt.strftime("%Y-%m-%d %H:%M"),
             "volume": candle_data.get('volume', 0),
-            "source": "Yahoo Finance",
-            "candle_datetime": candle_time.isoformat(),
-            "candle_datetime_bkk": candle_time.strftime("%Y-%m-%d %H:%M:%S")
+            "source": "Yahoo Finance HTTP API"
         }
         
-        print(f"Debug: Final result prepared with time accuracy", file=sys.stderr)
+        print(f"Debug: Final result prepared", file=sys.stderr)
         
         # ✅ ส่งผลลัพธ์กลับให้ Node.js
         print(json.dumps(result, ensure_ascii=False))
@@ -113,27 +95,6 @@ def main():
             "error": f"❌ เกิดข้อผิดพลาด: {str(e)}"
         }, ensure_ascii=False))
         sys.exit(1)
-
-def calculate_time_accuracy(actual_timestamp, expected_timestamp):
-    """คำนวณความแม่นยำของเวลา"""
-    if expected_timestamp is None:
-        return {
-            "difference_seconds": 0,
-            "difference_minutes": 0,
-            "is_accurate": True,
-            "note": "No expected timestamp provided"
-        }
-    
-    diff_seconds = abs(actual_timestamp - expected_timestamp)
-    diff_minutes = diff_seconds / 60
-    is_accurate = diff_seconds <= 300  # ยอมรับความผิดพลาด 5 นาที
-    
-    return {
-        "difference_seconds": diff_seconds,
-        "difference_minutes": round(diff_minutes, 2),
-        "is_accurate": is_accurate,
-        "note": f"Actual vs Expected: {diff_seconds}s difference"
-    }
 
 def convert_to_yahoo_symbol(symbol):
     """แปลง symbol เป็น Yahoo Finance format"""
@@ -191,15 +152,17 @@ def convert_to_yahoo_symbol(symbol):
         # ถ้าไม่พบ ลองใช้ตัวเดิม
         return symbol
 
-def get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp=None):
-    """ดึงข้อมูลแท่งเทียนจาก Yahoo Finance พร้อมตรวจสอบความแม่นยำของเวลา"""
+def get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz):
+    """ดึงข้อมูลแท่งเทียนจาก Yahoo Finance ด้วย HTTP API"""
     try:
-        # ใช้ expected_timestamp ถ้ามี, ถ้าไม่มีใช้ target_timestamp
-        reference_timestamp = expected_timestamp or target_timestamp
+        print(f"Debug: Fetching data for {yahoo_symbol}", file=sys.stderr)
         
-        # คำนวณช่วงเวลาสำหรับดึงข้อมูล - ขยายช่วงออกไปเพื่อความแน่ใจ
-        end_time = reference_timestamp + (3600 * 12)    # +12 ชั่วโมง
-        start_time = reference_timestamp - (3600 * 12)  # -12 ชั่วโมง
+        # คำนวณช่วงเวลาสำหรับดึงข้อมูล (UTC timestamps)
+        target_timestamp = int(utc_dt.timestamp())
+        
+        # ขยายช่วงเวลาออกไป เพื่อให้แน่ใจว่าได้ข้อมูล
+        end_time = target_timestamp + (3600 * 12)  # +12 ชั่วโมง
+        start_time = target_timestamp - (3600 * 12)  # -12 ชั่วโมง
         
         # สร้าง URL สำหรับ Yahoo Finance API
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}"
@@ -212,8 +175,7 @@ def get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp=Non
         }
         
         print(f"Debug: Fetching from Yahoo API: {url}", file=sys.stderr)
-        print(f"Debug: Time range: {datetime.fromtimestamp(start_time)} to {datetime.fromtimestamp(end_time)}", file=sys.stderr)
-        print(f"Debug: Reference timestamp: {reference_timestamp} ({datetime.fromtimestamp(reference_timestamp)})", file=sys.stderr)
+        print(f"Debug: Target timestamp: {target_timestamp}", file=sys.stderr)
         
         # เรียก API
         headers = {
@@ -243,7 +205,7 @@ def get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp=Non
         
         print(f"Debug: Got {len(timestamps)} data points", file=sys.stderr)
         
-        # หาแท่งเทียนที่ใกล้เคียงกับ reference_timestamp ที่สุด
+        # หาแท่งเทียนที่เวลาตรงกับ target_timestamp ที่สุด
         closest_index = None
         min_diff = float('inf')
         
@@ -251,7 +213,7 @@ def get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp=Non
             if ts is None or opens[i] is None or closes[i] is None:
                 continue
                 
-            diff = abs(ts - reference_timestamp)
+            diff = abs(ts - target_timestamp)
             if diff < min_diff:
                 min_diff = diff
                 closest_index = i
@@ -260,26 +222,22 @@ def get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp=Non
             print(f"Debug: No valid candle found", file=sys.stderr)
             return None
         
-        actual_timestamp = timestamps[closest_index]
-        time_diff_minutes = min_diff / 60
+        print(f"Debug: Found closest candle at index {closest_index}, diff: {min_diff} seconds", file=sys.stderr)
         
-        print(f"Debug: Found closest candle at index {closest_index}", file=sys.stderr)
-        print(f"Debug: Time difference: {min_diff} seconds ({time_diff_minutes:.2f} minutes)", file=sys.stderr)
-        print(f"Debug: Reference time: {datetime.fromtimestamp(reference_timestamp)}", file=sys.stderr)
-        print(f"Debug: Actual candle time: {datetime.fromtimestamp(actual_timestamp)}", file=sys.stderr)
+        # แปลงเวลากลับเป็น timezone ไทย
+        candle_timestamp = timestamps[closest_index]
+        candle_utc = datetime.fromtimestamp(candle_timestamp, tz=pytz.utc)
+        candle_thai = candle_utc.astimezone(thai_tz)
         
-        # เตือนถ้าความแตกต่างของเวลามากเกินไป
-        if time_diff_minutes > 5:
-            print(f"Warning: Large time difference detected: {time_diff_minutes:.2f} minutes", file=sys.stderr)
+        print(f"Debug: Candle time (Thai): {candle_thai.strftime('%Y-%m-%d %H:%M')}", file=sys.stderr)
         
         # ส่งคืนข้อมูลแท่งเทียน
         return {
-            'timestamp': actual_timestamp,
             'open': opens[closest_index],
             'close': closes[closest_index],
             'volume': volumes[closest_index] if volumes[closest_index] is not None else 0,
-            'time_difference_seconds': min_diff,
-            'time_difference_minutes': time_diff_minutes
+            'thai_time': candle_thai.strftime('%Y-%m-%d %H:%M'),
+            'timestamp': candle_timestamp
         }
         
     except requests.RequestException as e:
@@ -287,35 +245,6 @@ def get_yahoo_candle_data(yahoo_symbol, target_timestamp, expected_timestamp=Non
         return None
     except Exception as e:
         print(f"Debug: Yahoo API error: {str(e)}", file=sys.stderr)
-        return None
-
-def calculate_target_time(entry_time_str, round_num):
-    """คำนวณเวลาที่ต้องเช็คแท่งเทียน"""
-    try:
-        # แปลง entry_time_str เป็น datetime
-        hours, minutes = map(int, entry_time_str.split(':'))
-        
-        now = datetime.now()
-        entry_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-        
-        # ถ้าเวลาเข้าเทรดเลยไปแล้ว ให้ปรับให้เป็นช่วงเวลาที่เหมาะสม
-        if entry_time > now:
-            entry_time = entry_time - timedelta(days=1)
-        
-        # คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
-        target_time = entry_time + timedelta(minutes=5 * round_num)
-        
-        # แปลงเป็น timestamp
-        target_timestamp = int(time.mktime(target_time.timetuple()))
-        
-        print(f"Debug: Entry time: {entry_time}", file=sys.stderr)
-        print(f"Debug: Target time for round {round_num}: {target_time}", file=sys.stderr)
-        print(f"Debug: Target timestamp: {target_timestamp}", file=sys.stderr)
-        
-        return target_timestamp
-        
-    except Exception as e:
-        print(f"❌ Error calculating target time: {e}", file=sys.stderr)
         return None
 
 if __name__ == "__main__":

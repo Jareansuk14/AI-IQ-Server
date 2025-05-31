@@ -9,7 +9,7 @@ class ResultTrackingService {
     this.blockedUsers = new Set(); // เก็บ users ที่ถูก block
   }
 
-  // เริ่มต้นการติดตาม
+  // เริ่มต้นการติดตามผล
   async startTracking(userId, prediction, pair, entryTime) {
     try {
       console.log(`🎯 Starting result tracking for user ${userId}`);
@@ -18,47 +18,33 @@ class ResultTrackingService {
       // Block user จากการใช้คำสั่งอื่น
       this.blockedUsers.add(userId);
 
-      // คำนวณเวลาเข้าเทรดที่แน่นอน
-      const entryDateTime = this.calculateEntryDateTime(entryTime);
-      
       // สร้าง tracking session
       const session = {
         userId,
         pair,
         prediction, // CALL หรือ PUT
         entryTime,
-        entryDateTime: entryDateTime.toISOString(), // เพิ่มวันเวลาที่แน่นอน
-        entryTimestamp: Math.floor(entryDateTime.getTime() / 1000), // Unix timestamp
         round: 1,
         maxRounds: 7,
         isActive: true,
         startedAt: new Date(),
-        timezone: 'Asia/Bangkok',
-        results: [],
-        roundTimestamps: [] // เก็บ timestamp ของแต่ละรอบ
+        results: []
       };
 
       this.trackingSessions.set(userId, session);
 
-      // คำนวณเวลาเช็ครอบแรก
-      const firstCheckTime = this.calculateCheckTime(entryDateTime, 1);
-      session.roundTimestamps.push({
-        round: 1,
-        expectedTime: firstCheckTime.toISOString(),
-        expectedTimestamp: Math.floor(firstCheckTime.getTime() / 1000)
-      });
-
       // ส่งข้อความแจ้งว่ากำลังติดตามผล
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `🔍 กำลังติดตามผล ${pair}\n\n📊 คาดการณ์: ${prediction}\n⏰ เข้าเทรดตอน: ${entryTime}\n📅 วันที่: ${entryDateTime.toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' })}\n🕐 เวลาแน่นอน: ${entryDateTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n🎯 รอบที่: 1/7\n\n⏳ รอจนถึงเวลาปิดแท่งเทียน...`
+        text: `🔍 กำลังติดตามผล ${pair}\n\n📊 คาดการณ์: ${prediction}\n⏰ เข้าเทรดตอน: ${entryTime}\n🎯 รอบที่: 1/7\n\n⏳ รอจนถึงเวลาปิดแท่งเทียน...`
       });
 
-      const delayMs = firstCheckTime.getTime() - Date.now();
+      // คำนวณเวลาที่ต้องเช็คผล
+      const checkTime = this.calculateCheckTime(entryTime, 1);
+      const delayMs = checkTime.getTime() - Date.now();
 
-      console.log(`⏰ Entry DateTime: ${entryDateTime.toISOString()}`);
-      console.log(`⏰ First Check Time: ${firstCheckTime.toISOString()}`);
-      console.log(`🌍 Bangkok Time: ${firstCheckTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+      console.log(`⏰ Will check result at: ${checkTime.toISOString()}`);
+      console.log(`🌍 Local time: ${checkTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
       console.log(`⏱️ Delay: ${Math.round(delayMs / 1000)} seconds`);
 
       // ตั้ง timeout เพื่อเช็คผลครั้งแรก
@@ -76,31 +62,44 @@ class ResultTrackingService {
     }
   }
 
-  // คำนวณวันเวลาเข้าเทรดที่แน่นอน
-  calculateEntryDateTime(entryTimeStr) {
-    const [hours, minutes] = entryTimeStr.split(':').map(Number);
-    
-    const now = new Date();
-    const entryTime = new Date();
-    
-    // ตั้งเวลาสำหรับวันนี้
-    entryTime.setHours(hours, minutes, 0, 0);
-    
-    // ถ้าเวลาที่กำหนดเลยไปแล้ว ให้เลื่อนไปเป็นรอบถัดไป (5 นาทีข้างหน้า)
-    if (entryTime <= now) {
-      // หาช่วงเวลา 5 นาทีถัดไปที่ตรงกับเวลาที่กำหนด
-      const diffMinutes = Math.ceil((now.getTime() - entryTime.getTime()) / (5 * 60 * 1000));
-      entryTime.setMinutes(entryTime.getMinutes() + (diffMinutes * 5));
+  // คำนวณเวลาที่ต้องเช็คผล (ปรับปรุงใหม่)
+  calculateCheckTime(entryTimeStr, round) {
+    try {
+      // แปลง entryTimeStr เป็น full datetime ในเขตเวลาไทย
+      const [hours, minutes] = entryTimeStr.split(':').map(Number);
+      
+      const now = new Date();
+      const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      
+      // สร้างเวลาเข้าเทรดในเขตเวลาไทย
+      let entryTime = new Date(bangkokTime);
+      entryTime.setHours(hours, minutes, 0, 0);
+      
+      // ถ้าเวลาเข้าเทรดยังไม่ถึง ให้ใช้วันถัดไป
+      if (entryTime <= bangkokTime) {
+        // สำหรับรอบแรก ถ้าเวลาเลยไปแล้ว ให้ใช้วันถัดไป
+        if (round === 1) {
+          entryTime.setDate(entryTime.getDate() + 1);
+        }
+      }
+      
+      // คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ (เพิ่ม 5 นาที * รอบ)
+      const checkTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
+      
+      // แปลงกลับเป็น UTC สำหรับ JavaScript timeout
+      const utcCheckTime = new Date(checkTime.getTime() - (7 * 60 * 60 * 1000)); // ลบ 7 ชั่วโมง (UTC offset)
+      
+      console.log(`🕐 Entry time (Bangkok): ${entryTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+      console.log(`🎯 Check time (Bangkok): ${checkTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+      console.log(`🌍 Check time (UTC): ${utcCheckTime.toISOString()}`);
+      
+      return utcCheckTime;
+      
+    } catch (error) {
+      console.error('Error calculating check time:', error);
+      // Fallback: ใช้เวลาปัจจุบัน + 5 นาที
+      return new Date(Date.now() + (5 * 60 * 1000));
     }
-    
-    return entryTime;
-  }
-
-  // คำนวณเวลาที่ต้องเช็คผล
-  calculateCheckTime(entryDateTime, round) {
-    // เพิ่ม 5 นาที * รอบ สำหรับเวลาปิดแท่งเทียน
-    const checkTime = new Date(entryDateTime.getTime() + (5 * 60 * 1000 * round));
-    return checkTime;
   }
 
   // เช็คผลจาก IQ Option
@@ -114,22 +113,20 @@ class ResultTrackingService {
 
       console.log(`🔍 Checking result for user ${userId}, round ${session.round}`);
 
-      // คำนวณเวลาที่คาดหวังสำหรับรอบนี้
-      const expectedCheckTime = this.calculateCheckTime(new Date(session.entryDateTime), session.round);
-      const expectedTimestamp = Math.floor(expectedCheckTime.getTime() / 1000);
-
       // ส่งข้อความแจ้งว่ากำลังเช็คผล
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n📅 เวลาที่คาดหวัง: ${expectedCheckTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n⏳ กรุณารอสักครู่`
+        text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n⏳ กรุณารอสักครู่`
       });
+
+      // สร้าง datetime string สำหรับ Python script
+      const targetDateTime = this.createTargetDateTime(session.entryTime, session.round);
 
       // เรียก IQ Option API เพื่อดูแท่งเทียน
       const candleResult = await iqOptionService.getCandleColor(
         session.pair,
-        session.entryTime,
-        session.round,
-        expectedTimestamp // ส่ง expected timestamp ไปด้วย
+        targetDateTime, // ส่ง full datetime แทน
+        session.round
       );
 
       console.log(`📊 Candle result:`, candleResult);
@@ -138,45 +135,24 @@ class ResultTrackingService {
         throw new Error(candleResult.error);
       }
 
-      // ตรวจสอบความแม่นยำของเวลา
-      const timeDiff = Math.abs(candleResult.actual_timestamp - expectedTimestamp);
-      const isTimeAccurate = timeDiff <= 300; // ยอมรับความผิดพลาด 5 นาที
-
-      console.log(`⏰ Time accuracy check:`);
-      console.log(`   Expected: ${expectedTimestamp} (${new Date(expectedTimestamp * 1000).toISOString()})`);
-      console.log(`   Actual: ${candleResult.actual_timestamp} (${new Date(candleResult.actual_timestamp * 1000).toISOString()})`);
-      console.log(`   Difference: ${timeDiff} seconds`);
-      console.log(`   Accurate: ${isTimeAccurate}`);
-
       // ตรวจสอบผลว่าชนะหรือแพ้
       const isWin = this.checkWinLose(session.prediction, candleResult.color);
       
       // บันทึกผล
-      const resultData = {
+      session.results.push({
         round: session.round,
         candleColor: candleResult.color,
         prediction: session.prediction,
         isWin,
-        time: new Date(),
-        expectedTimestamp,
-        actualTimestamp: candleResult.actual_timestamp,
-        timeDiff,
-        isTimeAccurate,
-        candleData: {
-          open: candleResult.open,
-          close: candleResult.close,
-          symbol: candleResult.symbol || session.pair
-        }
-      };
-      
-      session.results.push(resultData);
+        time: new Date()
+      });
 
       if (isWin) {
         // ชนะ - จบการติดตาม
-        await this.handleWin(userId, session, candleResult, resultData);
+        await this.handleWin(userId, session, candleResult);
       } else {
         // แพ้ - ตรวจสอบว่าจะทำต่อหรือไม่
-        await this.handleLose(userId, session, candleResult, resultData);
+        await this.handleLose(userId, session, candleResult);
       }
 
     } catch (error) {
@@ -195,6 +171,47 @@ class ResultTrackingService {
     }
   }
 
+  // สร้าง target datetime string สำหรับ Python script
+  createTargetDateTime(entryTimeStr, round) {
+    try {
+      const [hours, minutes] = entryTimeStr.split(':').map(Number);
+      
+      const now = new Date();
+      const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      
+      // สร้างเวลาเข้าเทรดในเขตเวลาไทย
+      let entryTime = new Date(bangkokTime);
+      entryTime.setHours(hours, minutes, 0, 0);
+      
+      // ถ้าเวลาเข้าเทรดยังไม่ถึง ให้ใช้วันถัดไป
+      if (entryTime <= bangkokTime && round === 1) {
+        entryTime.setDate(entryTime.getDate() + 1);
+      }
+      
+      // คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
+      const targetTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
+      
+      // Format เป็น string ในรูปแบบ "YYYY-MM-DD HH:MM"
+      const year = targetTime.getFullYear();
+      const month = String(targetTime.getMonth() + 1).padStart(2, '0');
+      const day = String(targetTime.getDate()).padStart(2, '0');
+      const hour = String(targetTime.getHours()).padStart(2, '0');
+      const minute = String(targetTime.getMinutes()).padStart(2, '0');
+      
+      const targetDateTime = `${year}-${month}-${day} ${hour}:${minute}`;
+      
+      console.log(`🎯 Target datetime for round ${round}: ${targetDateTime} (Bangkok time)`);
+      
+      return targetDateTime;
+      
+    } catch (error) {
+      console.error('Error creating target datetime:', error);
+      // Fallback
+      const now = new Date();
+      return now.toISOString().slice(0, 16).replace('T', ' ');
+    }
+  }
+
   // ตรวจสอบชนะ/แพ้
   checkWinLose(prediction, candleColor) {
     if (prediction === 'CALL' && candleColor === 'green') {
@@ -207,7 +224,7 @@ class ResultTrackingService {
   }
 
   // จัดการเมื่อชนะ
-  async handleWin(userId, session, candleResult, resultData) {
+  async handleWin(userId, session, candleResult) {
     try {
       console.log(`🎉 User ${userId} WON at round ${session.round}`);
 
@@ -215,15 +232,10 @@ class ResultTrackingService {
       session.isActive = false;
       this.blockedUsers.delete(userId);
 
-      const actualTime = new Date(candleResult.actual_timestamp * 1000);
-      const timeAccuracyText = resultData.isTimeAccurate ? 
-        `✅ เวลาตรงตาม (ต่าง ${resultData.timeDiff}วิ)` : 
-        `⚠️ เวลาไม่ตรงตาม (ต่าง ${Math.round(resultData.timeDiff/60)}นาที)`;
-
       // ส่งข้อความแสดงความยินดี
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `🎉 ยินดีด้วย! คุณชนะแล้ว!\n\n📊 ${session.pair} รอบที่ ${session.round}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n💰 ราคา: ${candleResult.open} → ${candleResult.close}\n⏰ เวลาจริง: ${actualTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n${timeAccuracyText}\n\n🏆 ผลการเทรด: ชนะในรอบที่ ${session.round}`
+        text: `🎉 ยินดีด้วย! คุณชนะแล้ว!\n\n📊 ${session.pair} รอบที่ ${session.round}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n⏰ เวลา: ${candleResult.time}\n\n🏆 ผลการเทรด: ชนะในรอบที่ ${session.round}`
       });
 
       // ส่งการ์ดถามว่าจะเทรดต่อหรือไม่
@@ -241,42 +253,32 @@ class ResultTrackingService {
   }
 
   // จัดการเมื่อแพ้
-  async handleLose(userId, session, candleResult, resultData) {
+  async handleLose(userId, session, candleResult) {
     try {
       console.log(`❌ User ${userId} LOST at round ${session.round}`);
 
       // ตรวจสอบว่าครบ 7 รอบหรือยัง
       if (session.round >= session.maxRounds) {
         // แพ้ครบ 7 รอบ - จบการติดตาม
-        await this.handleMaxRoundsReached(userId, session, candleResult, resultData);
+        await this.handleMaxRoundsReached(userId, session, candleResult);
         return;
       }
 
       // ยังไม่ครบ 7 รอบ - ทำต่อ
       session.round++;
 
-      // คำนวณเวลาเช็ครอบถัดไป
-      const nextCheckTime = this.calculateCheckTime(new Date(session.entryDateTime), session.round);
-      const nextTimestamp = Math.floor(nextCheckTime.getTime() / 1000);
-      
-      session.roundTimestamps.push({
-        round: session.round,
-        expectedTime: nextCheckTime.toISOString(),
-        expectedTimestamp: nextTimestamp
-      });
-
-      const actualTime = new Date(candleResult.actual_timestamp * 1000);
-      const timeAccuracyText = resultData.isTimeAccurate ? 
-        `✅ เวลาตรงตาม (ต่าง ${resultData.timeDiff}วิ)` : 
-        `⚠️ เวลาไม่ตรงตาม (ต่าง ${Math.round(resultData.timeDiff/60)}นาที)`;
-
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `❌ รอบที่ ${session.round - 1}: ไม่ถูกต้อง\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n💰 ราคา: ${candleResult.open} → ${candleResult.close}\n⏰ เวลาจริง: ${actualTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n${timeAccuracyText}\n\n🔄 ทำต่อรอบที่ ${session.round}/${session.maxRounds}\n📅 เช็ครอบถัดไป: ${nextCheckTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n⏳ รอแท่งเทียนถัดไป...`
+        text: `❌ รอบที่ ${session.round - 1}: ไม่ถูกต้อง\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n🔄 ทำต่อรอบที่ ${session.round}/${session.maxRounds}\n⏳ รอแท่งเทียนถัดไป...`
       });
 
-      // ตั้งเวลาสำหรับเช็ครอบถัดไป
+      // คำนวณเวลาสำหรับรอบถัดไป
+      const nextCheckTime = this.calculateCheckTime(session.entryTime, session.round);
       const delayMs = nextCheckTime.getTime() - Date.now();
+
+      console.log(`⏰ Next check in ${Math.round(delayMs / 1000)} seconds`);
+
+      // ตั้งเวลาสำหรับเช็ครอบถัดไป
       setTimeout(() => {
         this.checkResult(userId);
       }, delayMs);
@@ -287,7 +289,7 @@ class ResultTrackingService {
   }
 
   // จัดการเมื่อแพ้ครบ 7 รอบ
-  async handleMaxRoundsReached(userId, session, candleResult, resultData) {
+  async handleMaxRoundsReached(userId, session, candleResult) {
     try {
       console.log(`💀 User ${userId} LOST all 7 rounds`);
 
@@ -295,14 +297,9 @@ class ResultTrackingService {
       session.isActive = false;
       this.blockedUsers.delete(userId);
 
-      const actualTime = new Date(candleResult.actual_timestamp * 1000);
-      const timeAccuracyText = resultData.isTimeAccurate ? 
-        `✅ เวลาตรงตาม (ต่าง ${resultData.timeDiff}วิ)` : 
-        `⚠️ เวลาไม่ตรงตาม (ต่าง ${Math.round(resultData.timeDiff/60)}นาที)`;
-
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `💀 เสียใจด้วย แพ้ครบ 7 รอบแล้ว\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ รอบสุดท้าย: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n💰 ราคา: ${candleResult.open} → ${candleResult.close}\n⏰ เวลาจริง: ${actualTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n${timeAccuracyText}\n\n📈 ลองใหม่ในครั้งหน้า!\n💪 อย่าท้อแท้ การเทรดต้องมีความอดทน`
+        text: `💀 เสียใจด้วย แพ้ครบ 7 รอบแล้ว\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ รอบสุดท้าย: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n📈 ลองใหม่ในครั้งหน้า!\n💪 อย่าท้อแท้ การเทรดต้องมีความอดทน`
       });
 
       // ส่งการ์ดถามว่าจะเทรดต่อหรือไม่
@@ -351,10 +348,7 @@ class ResultTrackingService {
         prediction: session.prediction,
         round: session.round,
         isActive: session.isActive,
-        startedAt: session.startedAt,
-        entryDateTime: session.entryDateTime,
-        timezone: session.timezone,
-        roundTimestamps: session.roundTimestamps
+        startedAt: session.startedAt
       }))
     };
   }
@@ -363,13 +357,9 @@ class ResultTrackingService {
   async handleBlockedUserMessage(userId) {
     const session = this.trackingSessions.get(userId);
     if (session) {
-      const nextRoundTime = session.roundTimestamps.find(r => r.round === session.round);
-      const nextCheckText = nextRoundTime ? 
-        `\n📅 เช็ครอบถัดไป: ${new Date(nextRoundTime.expectedTime).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}` : '';
-      
       return lineService.pushMessage(userId, {
         type: 'text',
-        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n🎯 คาดการณ์: ${session.prediction}\n📅 เข้าเทรด: ${new Date(session.entryDateTime).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}${nextCheckText}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
+        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n🎯 คาดการณ์: ${session.prediction}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
       });
     }
   }
@@ -384,7 +374,7 @@ class ResultTrackingService {
 
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `✅ ยกเลิกการติดตามผลแล้ว\n\n📊 ${session.pair} รอบที่ ${session.round}\n🎯 คาดการณ์: ${session.prediction}\n📅 เข้าเทรด: ${new Date(session.entryDateTime).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n\n💡 คุณสามารถใช้งานคำสั่งอื่นได้แล้ว`
+        text: `✅ ยกเลิกการติดตามผลแล้ว\n\n📊 ${session.pair} รอบที่ ${session.round}\n🎯 คาดการณ์: ${session.prediction}\n\n💡 คุณสามารถใช้งานคำสั่งอื่นได้แล้ว`
       });
 
       return true;
