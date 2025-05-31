@@ -1,4 +1,4 @@
-//AI-Server/services/iqOptionService.js - Updated for Yahoo Finance
+//AI-Server/services/iqOptionService.js
 const { exec } = require('child_process');
 const path = require('path');
 

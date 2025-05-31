@@ -1,5 +1,4 @@
-//AI-Server/controllers/lineController.js - อัปเดตเพื่อรองรับระบบติดตามผล
-
+//AI-Server/controllers/lineController.js 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
 const creditService = require('../services/creditService');
