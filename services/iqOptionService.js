@@ -12,11 +12,58 @@ class IQOptionService {
     return new Promise((resolve) => {
       try {
         console.log(`🐍 Calling Python script for ${pair} at ${entryTime}, round ${round}`);
-
-        // แปลงชื่อคู่เงินให้ตรงกับ IQ Option format
+  
+        // 🎭 MOCK DATA สำหรับทดสอบ
+        if (process.env.NODE_ENV === 'production' || process.env.USE_MOCK === 'true') {
+          console.log(`🎭 Using MOCK data for testing`);
+          
+          // สุ่มสีแท่งเทียน
+          const colors = ['green', 'red'];
+          const randomColor = colors[Math.floor(Math.random() * colors.length)];
+          
+          // สุ่มราคา
+          const basePrice = pair === 'BTCUSD' ? 103000 : 1.0900;
+          const variance = pair === 'BTCUSD' ? 100 : 0.0050;
+          const open = basePrice + (Math.random() - 0.5) * variance;
+          const close = randomColor === 'green' 
+            ? open + Math.random() * (variance/2)
+            : open - Math.random() * (variance/2);
+  
+          // คำนวณเวลาแสดงผล
+          const [hours, minutes] = entryTime.split(':').map(Number);
+          const resultTime = new Date();
+          resultTime.setHours(hours, minutes + (5 * round), 0, 0);
+          const displayTime = resultTime.toLocaleTimeString('th-TH', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+          });
+  
+          const mockResult = {
+            pair: this.convertPairToIQFormat(pair),
+            time: displayTime,
+            candleSize: "5min",
+            open: Number(open.toFixed(pair === 'BTCUSD' ? 3 : 5)),
+            close: Number(close.toFixed(pair === 'BTCUSD' ? 3 : 5)),
+            color: randomColor,
+            round,
+            entryTime,
+            timestamp: new Date().toISOString(),
+            isMock: true // ระบุว่าเป็น mock data
+          };
+  
+          console.log(`🎭 Mock result:`, mockResult);
+          
+          // รอ 2 วินาที เพื่อจำลองการประมวลผล
+          setTimeout(() => {
+            resolve(mockResult);
+          }, 2000);
+          
+          return;
+        }
+  
+        // โค้ดเดิมสำหรับเรียก Python (ถ้าไม่ใช่ production)
         const iqPair = this.convertPairToIQFormat(pair);
-        
-        // สร้างคำสั่ง Python พร้อม parameters
         const command = `/opt/render/project/src/.venv/bin/python "${this.pythonScriptPath}" "${iqPair}" "${entryTime}" ${round}`;
         
         console.log(`🔧 Command: ${command}`);
