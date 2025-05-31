@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - อัปเดตให้ใช้ Technical Analysis
+// AI-Server/controllers/lineController.js - อัปเดตใหม่รวมระบบแชร์
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -11,7 +11,9 @@ const {
   createPaymentInfoMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage
+  createContinueTradeMessage,
+  createInvitationCard,    // ← เพิ่มใหม่
+  createShareMessage       // ← เพิ่มใหม่
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -116,7 +118,7 @@ const saveInteraction = async (user, command, imageId, aiResponse, processingTim
   }
 };
 
-// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ
+// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ - อัปเดตใหม่
 const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
   const userId = event.source.userId;
@@ -152,14 +154,24 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
+    // 🆕 แก้ไขส่วนแชร์ใหม่
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
-      const referralCode = await creditService.getReferralCode(userId);
-      const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
-      
-      return lineService.replyMessage(event.replyToken, {
-        type: 'text',
-        text: `🎯 รหัสแนะนำของคุณคือ: ${referralCode}\n\n🎁 แชร์ให้เพื่อนเพื่อรับ 10 เครดิต!\n\n📝 เพื่อนของคุณสามารถพิมพ์:\nรหัส:${referralCode}\nเพื่อรับเพิ่ม 5 เครดิต\n\n🔗 หรือแชร์ลิงก์นี้:\n${lineUrl}\n\n💰 ยิ่งแชร์มาก ยิ่งได้เครดิตเยอะ!`
-      });
+      try {
+        const profile = await lineService.getUserProfile(userId);
+        const referralCode = await creditService.getReferralCode(userId);
+        const userName = profile?.displayName || 'คุณ';
+        
+        // สร้างหน้าแชร์ใหม่
+        const shareMessage = createShareMessage(referralCode, userName);
+        
+        return lineService.replyMessage(event.replyToken, shareMessage);
+      } catch (error) {
+        console.error('Error creating share message:', error);
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '❌ เกิดข้อผิดพลาดในการสร้างหน้าแชร์ กรุณาลองใหม่อีกครั้ง'
+        });
+      }
     }
     
     if (text.startsWith('code:') || text.startsWith('รหัส:')) {
@@ -208,7 +220,7 @@ const handlePostbackEvent = async (event) => {
     console.log('Handling postback event:', action, data);
     
     if (resultTrackingService.isUserBlocked(userId) && 
-        !['continue_trading', 'stop_trading'].includes(action)) {
+        !['continue_trading', 'stop_trading', 'share_invitation', 'copy_invitation', 'native_share', 'copy_link'].includes(action)) {
       await resultTrackingService.handleBlockedUserMessage(userId);
       return;
     }
@@ -224,7 +236,7 @@ const handlePostbackEvent = async (event) => {
           );
           
           const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-          const qrCodeURL = `${baseURL}/payment/qr/${paymentTransaction._id}`;
+          const qrCodeURL = `${baseURL}/api/payment/qr/${paymentTransaction._id}`;
           
           const paymentInfoMessage = createPaymentInfoMessage(paymentTransaction, qrCodeURL);
           
@@ -255,7 +267,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis (อัปเดตใหม่)
+      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -343,6 +355,110 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
+      // 🆕 เพิ่มเคสใหม่สำหรับการแชร์
+      case 'share_invitation':
+        const referralCode = params.get('referral_code');
+        const shareType = params.get('type');
+        
+        try {
+          const profile = await lineService.getUserProfile(userId);
+          const inviterName = profile?.displayName || 'เพื่อน';
+          
+          if (shareType === 'line_share') {
+            // สร้างการ์ดเชิญ
+            const invitationCard = createInvitationCard(referralCode, inviterName);
+            
+            return lineService.replyMessage(event.replyToken, [
+              {
+                type: 'text',
+                text: '📤 เลือกวิธีแชร์ที่ต้องการ:'
+              },
+              {
+                type: "flex",
+                altText: `🎁 คำเชิญจาก ${inviterName} - รับเครดิตฟรี!`,
+                contents: invitationCard.contents,
+                quickReply: {
+                  items: [
+                    {
+                      type: "action",
+                      action: {
+                        type: "postback",
+                        label: "📤 แชร์ใน LINE",
+                        data: `action=native_share&referral_code=${referralCode}&inviter_name=${encodeURIComponent(inviterName)}`
+                      }
+                    },
+                    {
+                      type: "action", 
+                      action: {
+                        type: "postback",
+                        label: "📋 คัดลอกลิงก์",
+                        data: `action=copy_link&referral_code=${referralCode}`
+                      }
+                    }
+                  ]
+                }
+              }
+            ]);
+          }
+        } catch (error) {
+          console.error('Error creating invitation card:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ เกิดข้อผิดพลาดในการสร้างการ์ดเชิญ'
+          });
+        }
+        break;
+        
+      case 'native_share':
+        // สำหรับการแชร์ผ่าน LINE Native Share
+        const shareReferralCode = params.get('referral_code');
+        const inviterName = decodeURIComponent(params.get('inviter_name') || 'เพื่อน');
+        
+        try {
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `📤 คัดลอกข้อความด้านล่างแล้วแชร์ให้เพื่อน:\n\n🎁 ${inviterName} เชิญคุณใช้บริการ AI วิเคราะห์รูปภาพฟรี!\n\n✨ ใช้รหัส: ${shareReferralCode}\nรับเครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)\n\n📱 เพิ่มเพื่อน: https://line.me/R/ti/p/@033mebpp\n📝 หลังเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${shareReferralCode}\n\n🚀 ลองเลย!`
+          });
+        } catch (error) {
+          console.error('Error in native share:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ เกิดข้อผิดพลาดในการแชร์'
+          });
+        }
+        break;
+        
+      case 'copy_invitation':
+        const copyReferralCode = params.get('referral_code');
+        
+        try {
+          const profile = await lineService.getUserProfile(userId);
+          const userName = profile?.displayName || 'เพื่อน';
+          
+          const copyText = `🎁 ${userName} เชิญคุณใช้บริการ AI วิเคราะห์รูปภาพฟรี!\n\n✨ ใช้รหัส: ${copyReferralCode}\nรับเครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)\n\n📱 เพิ่มเพื่อน: https://line.me/R/ti/p/@033mebpp\n📝 หลังเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${copyReferralCode}\n\n🚀 ลองเลย!`;
+          
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: `📋 คัดลอกข้อความด้านล่างแล้วแชร์ให้เพื่อน:\n\n${copyText}\n\n💡 เพียงคัดลอกแล้วส่งผ่าน LINE, Facebook, หรือแอปอื่นๆ`
+          });
+        } catch (error) {
+          console.error('Error copying invitation:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ เกิดข้อผิดพลาดในการสร้างข้อความเชิญ'
+          });
+        }
+        break;
+        
+      case 'copy_link':
+        const linkReferralCode = params.get('referral_code');
+        const shareUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${linkReferralCode}`;
+        
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `🔗 ลิงก์แชร์ของคุณ:\n\n${shareUrl}\n\n📤 คัดลอกลิงก์นี้แล้วส่งให้เพื่อน\nเมื่อเพื่อนกดลิงก์จะไปหาบอทโดยอัตโนมัติ\n\n💰 ทุกการแนะนำสำเร็จ = 10 เครดิตฟรี!`
+        });
+
       case 'continue_trading':
         try {
           const forexMessage = createForexPairsMessage();
@@ -403,7 +519,7 @@ const handleFollowEvent = async (event) => {
   }
 };
 
-// ฟังก์ชันหลักสำหรับการจัดการข้อความ (ไม่เปลี่ยนแปลง)
+// ฟังก์ชันหลักสำหรับการจัดการข้อความ
 const handleEvent = async (event) => {
   console.log('Event type:', event.type);
   
@@ -427,7 +543,7 @@ const handleEvent = async (event) => {
 
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - แชร์ให้เพื่อนรับเครดิต\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
   }
 

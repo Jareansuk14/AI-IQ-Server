@@ -2111,12 +2111,371 @@ function createContinueTradeMessage() {
   };
 }
 
-// อัปเดต module.exports เพื่อรวมฟังก์ชันใหม่
+// สร้างการ์ดเชิญชวน
+function createInvitationCard(referralCode, inviterName = 'เพื่อน') {
+  return {
+    type: "flex",
+    altText: `🎁 คำเชิญจาก ${inviterName} - รับเครดิตฟรี!`,
+    contents: {
+      type: "bubble",
+      size: "mega",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "text",
+                text: "🎁",
+                size: "xxl",
+                color: "#ffffff",
+                flex: 0,
+                margin: "none"
+              },
+              {
+                type: "text",
+                text: "คำเชิญพิเศษ!",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xl",
+                flex: 4,
+                margin: "md"
+              }
+            ]
+          },
+          {
+            type: "text",
+            text: `จาก ${inviterName}`,
+            color: "#ffffff",
+            size: "sm",
+            margin: "sm",
+            align: "center"
+          }
+        ],
+        backgroundColor: "#ff6b6b",
+        paddingAll: "20px",
+        paddingBottom: "16px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          // คำเชิญชวน
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🚀 ขอเชิญใช้บริการ AI วิเคราะห์รูปภาพ",
+                weight: "bold",
+                size: "lg",
+                color: "#2c2c2c",
+                wrap: true,
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "✨ รับเครดิตฟรีเมื่อสมัครด้วยรหัสเชิญ!",
+                size: "md",
+                color: "#666666",
+                wrap: true,
+                align: "center",
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#e0e0e0"
+          },
+          
+          // รหัสเชิญและวิธีใช้
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🎯 รหัสเชิญของคุณ",
+                weight: "bold",
+                size: "md",
+                color: "#2c2c2c"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: referralCode,
+                    weight: "bold",
+                    size: "xxl",
+                    color: "#ff6b6b",
+                    align: "center"
+                  }
+                ],
+                backgroundColor: "#fff5f5",
+                cornerRadius: "8px",
+                paddingAll: "12px",
+                margin: "sm"
+              },
+              
+              // วิธีใช้
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: "📝 วิธีใช้ง่ายๆ เพียง 3 ขั้นตอน:",
+                    weight: "bold",
+                    size: "sm",
+                    color: "#2c2c2c",
+                    margin: "md"
+                  },
+                  {
+                    type: "text",
+                    text: "1️⃣ เพิ่มเพื่อน LINE Bot\n2️⃣ พิมพ์: รหัส:" + referralCode + "\n3️⃣ รับเครดิตฟรี 5 เครดิตทันที!",
+                    size: "xs",
+                    color: "#666666",
+                    wrap: true,
+                    margin: "sm"
+                  }
+                ]
+              }
+            ],
+            margin: "lg"
+          },
+          
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#e0e0e0"
+          },
+          
+          // ข้อมูลเพิ่มเติม
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🎁 สิทธิพิเศษที่คุณจะได้รับ:",
+                weight: "bold",
+                size: "sm",
+                color: "#2c2c2c"
+              },
+              {
+                type: "text",
+                text: "• เครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)\n• เครดิตเริ่มต้น 10 เครดิต\n• AI วิเคราะห์รูปภาพได้ทันที\n• วิเคราะห์ Forex แบบ Real-time",
+                size: "xs",
+                color: "#666666",
+                wrap: true,
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          
+          // คำแนะนำการแชร์
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "💡 เมื่อคุณสมัครแล้ว คุณจะได้รหัสแชร์ของคุณเอง!",
+                weight: "bold",
+                size: "xs",
+                color: "#ff6b6b",
+                wrap: true,
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "แชร์ให้เพื่อนแล้วรับ 10 เครดิตฟรีต่อคน!",
+                size: "xs",
+                color: "#666666",
+                wrap: true,
+                align: "center",
+                margin: "xs"
+              }
+            ],
+            backgroundColor: "#fff5f5",
+            cornerRadius: "8px",
+            paddingAll: "12px",
+            margin: "lg"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#ffffff"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "uri",
+              label: "🚀 เพิ่มเพื่อน LINE Bot",
+              uri: "https://line.me/R/ti/p/@033mebpp"
+            },
+            color: "#ff6b6b",
+            height: "sm"
+          },
+          {
+            type: "text",
+            text: "หลังจากเพิ่มเพื่อนแล้ว พิมพ์: รหัส:" + referralCode,
+            size: "xs",
+            color: "#999999",
+            align: "center",
+            margin: "sm"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#ffffff"
+      }
+    }
+  };
+}
+
+// สร้างข้อความพร้อม Share Target Picker
+function createShareMessage(referralCode, userName = 'คุณ') {
+  return {
+    type: "flex",
+    altText: `แชร์รหัสเชิญ ${referralCode} ให้เพื่อน`,
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "🎁 แชร์ให้เพื่อน",
+            weight: "bold",
+            color: "#ffffff",
+            size: "lg",
+            align: "center"
+          },
+          {
+            type: "text",
+            text: "รับ 10 เครดิตต่อการแนะนำ!",
+            color: "#ffffff",
+            size: "sm",
+            align: "center",
+            margin: "sm"
+          }
+        ],
+        backgroundColor: "#4ecdc4",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "รหัสแนะนำของคุณ",
+                weight: "bold",
+                size: "md",
+                color: "#2c2c2c",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: referralCode,
+                weight: "bold",
+                size: "xxl",
+                color: "#4ecdc4",
+                align: "center",
+                margin: "sm"
+              }
+            ],
+            backgroundColor: "#f0ffff",
+            cornerRadius: "8px",
+            paddingAll: "16px",
+            margin: "lg"
+          },
+          {
+            type: "text",
+            text: "💡 เลือกวิธีแชร์ที่ต้องการ:",
+            weight: "bold",
+            size: "sm",
+            color: "#2c2c2c",
+            margin: "lg"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#ffffff"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "postback",
+              label: "📤 แชร์ให้เพื่อนใน LINE",
+              data: `action=share_invitation&referral_code=${referralCode}&type=line_share`
+            },
+            color: "#4ecdc4",
+            height: "sm"
+          },
+          {
+            type: "button",
+            style: "secondary",
+            action: {
+              type: "postback",
+              label: "📋 คัดลอกข้อความเชิญ",
+              data: `action=copy_invitation&referral_code=${referralCode}`
+            },
+            height: "sm",
+            margin: "sm"
+          },
+          {
+            type: "text",
+            text: "💰 ทุกการแนะนำสำเร็จ = 10 เครดิตฟรี",
+            size: "xs",
+            color: "#999999",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#ffffff"
+      }
+    }
+  };
+}
+
+// อัปเดต module.exports
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
   createPaymentSuccessMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage  // เพิ่มบรรทัดนี้
+  createContinueTradeMessage,
+  createInvitationCard,        // ← เพิ่มใหม่
+  createShareMessage           // ← เพิ่มใหม่
 };
