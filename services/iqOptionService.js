@@ -8,17 +8,23 @@ class IQOptionService {
     this.pythonScriptPath = path.join(__dirname, '../scripts/yahoo_candle_checker.py');
   }
 
-  // ดึงสีแท่งเทียนจาก Yahoo Finance (แทน IQ Option)
-  async getCandleColor(pair, entryTime, round) {
+  // ดึงสีแท่งเทียนจาก Yahoo Finance (แทน IQ Option) - อัปเดตให้รองรับ expectedTimestamp
+  async getCandleColor(pair, entryTime, round, expectedTimestamp = null) {
     return new Promise((resolve) => {
       try {
         console.log(`🐍 Calling Yahoo Finance API for ${pair} at ${entryTime}, round ${round}`);
+        if (expectedTimestamp) {
+          console.log(`⏰ Expected timestamp: ${expectedTimestamp} (${new Date(expectedTimestamp * 1000).toISOString()})`);
+        }
 
         // ไม่ต้องแปลง pair format - Yahoo script จะจัดการเอง
         const targetPair = pair;
         
-        // สร้างคำสั่ง Python พร้อม parameters
-        const command = `python "${this.pythonScriptPath}" "${targetPair}" "${entryTime}" ${round}`;
+        // สร้างคำสั่ง Python พร้อม parameters (เพิ่ม expectedTimestamp ถ้ามี)
+        let command = `python "${this.pythonScriptPath}" "${targetPair}" "${entryTime}" ${round}`;
+        if (expectedTimestamp) {
+          command += ` ${expectedTimestamp}`;
+        }
         
         console.log(`🔧 Command: ${command}`);
 
@@ -29,7 +35,8 @@ class IQOptionService {
               error: `ไม่สามารถเชื่อมต่อ Yahoo Finance ได้: ${error.message}`,
               pair: targetPair,
               entryTime,
-              round
+              round,
+              expectedTimestamp
             });
             return;
           }
@@ -51,12 +58,17 @@ class IQOptionService {
                 error: result.error,
                 pair: targetPair,
                 entryTime,
-                round
+                round,
+                expectedTimestamp
               });
               return;
             }
 
             console.log(`✅ Successfully got candle data from Yahoo Finance:`, result);
+            
+            // เพิ่มข้อมูลความแม่นยำของเวลา
+            const timeAccuracy = result.time_accuracy || {};
+            console.log(`⏰ Time accuracy: ${timeAccuracy.is_accurate ? 'ACCURATE' : 'INACCURATE'} (${timeAccuracy.difference_seconds || 0}s difference)`);
             
             resolve({
               pair: result.symbol || targetPair,
@@ -67,6 +79,12 @@ class IQOptionService {
               color: result.color, // 'green', 'red', หรือ 'doji'
               round,
               entryTime,
+              expectedTimestamp,
+              target_timestamp: result.target_timestamp,
+              actual_timestamp: result.actual_timestamp,
+              time_accuracy: timeAccuracy,
+              candle_datetime: result.candle_datetime,
+              candle_datetime_bkk: result.candle_datetime_bkk,
               timestamp: new Date().toISOString(),
               source: result.source || 'Yahoo Finance'
             });
@@ -80,7 +98,8 @@ class IQOptionService {
               rawOutput: stdout,
               pair: targetPair,
               entryTime,
-              round
+              round,
+              expectedTimestamp
             });
           }
         });
@@ -91,7 +110,8 @@ class IQOptionService {
           error: `เกิดข้อผิดพลาดไม่คาดคิด: ${err.message}`,
           pair,
           entryTime,
-          round
+          round,
+          expectedTimestamp
         });
       }
     });
@@ -200,7 +220,9 @@ class IQOptionService {
         '✅ Forex + Crypto + Commodities',
         '✅ Real-time data',
         '✅ Historical data',
-        '✅ 5-minute candlesticks'
+        '✅ 5-minute candlesticks',
+        '✅ Time accuracy validation',
+        '✅ Detailed timestamp tracking'
       ],
       lastChecked: new Date().toISOString()
     };
