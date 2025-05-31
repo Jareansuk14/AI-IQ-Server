@@ -1,4 +1,4 @@
-//AI-Server/models/trackingSession.js - แก้ไข validation
+//AI-Server/models/trackingSession.js - Model ใหม่สำหรับติดตามผล
 const mongoose = require('mongoose');
 
 const TrackingSessionSchema = new mongoose.Schema({
@@ -11,9 +11,10 @@ const TrackingSessionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // ข้อมูลการเทรด
   pair: {
     type: String,
-    required: true // EUR/USD, GBP/USD, etc.
+    required: true // EUR/USD, BTC/USD, etc.
   },
   prediction: {
     type: String,
@@ -21,12 +22,19 @@ const TrackingSessionSchema = new mongoose.Schema({
     required: true
   },
   entryTime: {
-    type: String,
-    required: true // "13:45"
-  },
-  entryDate: {
     type: Date,
-    required: true // วันที่เทรด
+    required: true // เวลาที่เข้าเทรด
+  },
+  entryTimeString: {
+    type: String,
+    required: true // "13:45" สำหรับแสดงผล
+  },
+  
+  // สถานะการติดตาม
+  status: {
+    type: String,
+    enum: ['tracking', 'completed', 'failed'],
+    default: 'tracking'
   },
   currentRound: {
     type: Number,
@@ -36,22 +44,30 @@ const TrackingSessionSchema = new mongoose.Schema({
     type: Number,
     default: 7
   },
-  status: {
-    type: String,
-    enum: ['tracking', 'won', 'lost', 'cancelled'],
-    default: 'tracking'
-  },
+  
+  // ผลลัพธ์
   results: [{
     round: Number,
-    checkTime: String, // "13:50"
+    checkTime: Date,
+    checkTimeString: String, // "13:50"
     candleColor: String, // "green", "red", "doji"
     openPrice: Number,
     closePrice: Number,
     isCorrect: Boolean,
-    checkedAt: Date
+    createdAt: { type: Date, default: Date.now }
   }],
-  wonAt: Date,
-  lostAt: Date,
+  
+  // สถานะสุดท้าย
+  finalResult: {
+    type: String,
+    enum: ['win', 'lose', 'max_rounds_reached']
+  },
+  completedAt: Date,
+  
+  // ข้อมูลเพิ่มเติม
+  nextCheckTime: Date, // เวลาที่ต้องเช็คครั้งถัดไป
+  symbol: String, // สำหรับ IQ Option API (EURUSD, BTCUSD)
+  
   createdAt: {
     type: Date,
     default: Date.now
@@ -60,38 +76,55 @@ const TrackingSessionSchema = new mongoose.Schema({
 
 // Index สำหรับการค้นหา
 TrackingSessionSchema.index({ lineUserId: 1, status: 1 });
-TrackingSessionSchema.index({ status: 1, entryDate: 1 });
+TrackingSessionSchema.index({ nextCheckTime: 1, status: 1 });
+TrackingSessionSchema.index({ status: 1, nextCheckTime: 1 });
 
 // Methods
-TrackingSessionSchema.methods.getNextCheckTime = function() {
-  const [hours, minutes] = this.entryTime.split(':').map(Number);
-  const nextMinutes = minutes + (this.currentRound * 5);
-  const nextHours = hours + Math.floor(nextMinutes / 60);
-  const finalMinutes = nextMinutes % 60;
+TrackingSessionSchema.methods.isActive = function() {
+  return this.status === 'tracking';
+};
+
+TrackingSessionSchema.methods.addResult = function(candleData) {
+  const isCorrect = this.checkPrediction(candleData.color);
   
-  return `${nextHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
+  this.results.push({
+    round: this.currentRound,
+    checkTime: new Date(),
+    checkTimeString: new Date().toLocaleTimeString('th-TH', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Bangkok'
+    }),
+    candleColor: candleData.color,
+    openPrice: candleData.open,
+    closePrice: candleData.close,
+    isCorrect
+  });
+  
+  return isCorrect;
 };
 
-TrackingSessionSchema.methods.isWinCondition = function(candleColor) {
-  if (this.prediction === 'CALL' && candleColor === 'green') return true;
-  if (this.prediction === 'PUT' && candleColor === 'red') return true;
-  return false;
+TrackingSessionSchema.methods.checkPrediction = function(candleColor) {
+  if (this.prediction === 'CALL') {
+    return candleColor === 'green';
+  } else { // PUT
+    return candleColor === 'red';
+  }
 };
 
-// เพิ่ม method สำหรับ debug
-TrackingSessionSchema.methods.getDebugInfo = function() {
-  return {
-    id: this._id,
-    pair: this.pair,
-    prediction: this.prediction,
-    entryTime: this.entryTime,
-    currentRound: this.currentRound,
-    maxRounds: this.maxRounds,
-    status: this.status,
-    nextCheckTime: this.getNextCheckTime(),
-    hasUser: !!this.user,
-    lineUserId: this.lineUserId
-  };
+TrackingSessionSchema.methods.calculateNextCheckTime = function() {
+  const next = new Date(this.entryTime);
+  next.setMinutes(next.getMinutes() + (this.currentRound + 1) * 5);
+  this.nextCheckTime = next;
+  return next;
+};
+
+TrackingSessionSchema.methods.getStatusText = function() {
+  if (this.status === 'completed') {
+    return this.finalResult === 'win' ? '🎉 ชนะแล้ว!' : '😔 แพ้แล้ว';
+  }
+  return `🔄 ติดตามผล (${this.currentRound}/${this.maxRounds})`;
 };
 
 module.exports = mongoose.model('TrackingSession', TrackingSessionSchema);

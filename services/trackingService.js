@@ -1,57 +1,44 @@
-//AI-Server/services/trackingService.js - แก้ไขฟังก์ชัน startTracking
-
+//AI-Server/services/trackingService.js - Service หลักสำหรับจัดการการติดตาม
 const TrackingSession = require('../models/trackingSession');
 const iqOptionService = require('./iqOptionService');
 const lineService = require('./lineService');
-const User = require('../models/user'); // เพิ่มบรรทัดนี้
-const { createTrackingResultMessage, createContinueTradingMessage } = require('../utils/flexMessages');
+const { createContinueTradeMessage } = require('../utils/flexMessages');
 
 class TrackingService {
-  constructor() {
-    this.activeChecks = new Map(); // เก็บ setTimeout IDs
-  }
-
-  // เริ่มติดตามผลการเทรด (แก้ไขแล้ว)
-  async startTracking(userId, pair, prediction, entryTime) {
+  
+  // เริ่มต้นการติดตามผล
+  async startTracking(userId, lineUserId, pair, prediction, entryTime, entryTimeString) {
     try {
-      console.log(`🎯 Starting tracking for ${userId}: ${pair} ${prediction} at ${entryTime}`);
-      
-      // ค้นหาข้อมูลผู้ใช้จาก lineUserId
-      const user = await User.findOne({ lineUserId: userId });
-      if (!user) {
-        throw new Error('ไม่พบข้อมูลผู้ใช้ในระบบ');
-      }
-      
-      // ตรวจสอบว่ามีการติดตามอยู่แล้วหรือไม่
+      // ตรวจสอบว่ามี session ที่ active อยู่หรือไม่
       const existingSession = await TrackingSession.findOne({
-        lineUserId: userId,
+        lineUserId,
         status: 'tracking'
       });
 
       if (existingSession) {
-        throw new Error('คุณมีการติดตามผลอยู่แล้ว กรุณารอจนกว่าจะเสร็จสิ้น');
+        throw new Error('มีการติดตามผลอยู่แล้ว กรุณารอให้เสร็จสิ้นก่อน');
       }
 
-      // สร้าง tracking session ใหม่ (แก้ไขให้ใส่ user ObjectId)
+      // สร้าง session ใหม่
       const session = new TrackingSession({
-        user: user._id,        // ใช้ ObjectId แทน
-        lineUserId: userId,    // เก็บไว้เพื่อความสะดวก
+        user: userId,
+        lineUserId,
         pair,
         prediction,
-        entryTime,
-        entryDate: new Date()
+        entryTime: new Date(entryTime),
+        entryTimeString,
+        symbol: iqOptionService.convertPairToSymbol(pair)
       });
 
+      // คำนวณเวลาเช็คครั้งแรก (หลัง 5 นาที)
+      session.calculateNextCheckTime();
       await session.save();
 
-      // แจ้งผู้ใช้ว่าเริ่มติดตาม
-      await lineService.pushMessage(userId, {
-        type: 'text',
-        text: `🎯 เริ่มติดตามผล ${pair} ${prediction}\n📊 เวลาเข้าเทรด: ${entryTime}\n⏰ จะเช็คผลทุก 5 นาที\n🎲 สูงสุด 7 ตา`
-      });
-
-      // ตั้งเวลาเช็คครั้งแรก (5 นาทีหลังจาก entry time)
-      this.scheduleNextCheck(session);
+      console.log(`🎯 Started tracking: ${pair} ${prediction} at ${entryTimeString}`);
+      
+      // ส่งข้อความแจ้งเริ่มติดตาม
+      const trackingMessage = this.createTrackingStartMessage(session);
+      await lineService.pushMessage(lineUserId, trackingMessage);
 
       return session;
     } catch (error) {
@@ -60,238 +47,213 @@ class TrackingService {
     }
   }
 
-  // แก้ไขฟังก์ชัน scheduleNextCheck ให้คำนวณเวลาถูกต้อง
-  scheduleNextCheck(session) {
-    const nextCheckTime = session.getNextCheckTime();
-    const now = new Date();
-    
-    console.log(`Current time: ${now.toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
-    console.log(`Entry time: ${session.entryTime}`);
-    console.log(`Next check time: ${nextCheckTime}`);
-    console.log(`Current round: ${session.currentRound}`);
-    
-    // แปลงเวลาเช็คจาก string เป็น Date object
-    const [hours, minutes] = nextCheckTime.split(':').map(Number);
-    
-    // ใช้วันที่ปัจจุบันสำหรับการเช็ค
-    const checkDate = new Date();
-    checkDate.setHours(hours, minutes, 0, 0);
-    
-    // ถ้าเวลาที่จะเช็คผ่านไปแล้วในวันนี้ ให้เช็คทันที
-    let delay;
-    if (checkDate <= now) {
-      // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันทีใน 10 วินาที
-      delay = 10000;
-      console.log(`⚠️ Check time ${nextCheckTime} has passed, checking in 10 seconds`);
-    } else {
-      delay = checkDate.getTime() - now.getTime();
-    }
-    
-    // จำกัดเวลารอสูงสุด 1 ชั่วโมง (เผื่อมีปัญหาการคำนวณ)
-    if (delay > 60 * 60 * 1000) {
-      delay = 10000; // เช็คทันทีใน 10 วินาทีแทน
-      console.log(`⚠️ Delay too long (${delay/1000}s), checking in 10 seconds instead`);
-    }
-    
-    console.log(`⏰ Next check scheduled for ${nextCheckTime} (in ${(delay/1000).toFixed(1)} seconds)`);
-    
-    const timeoutId = setTimeout(() => {
-      this.checkResult(session._id);
-    }, delay);
-
-    this.activeChecks.set(session._id.toString(), timeoutId);
-  }
-
-  // เช็คผลการเทรด (คงเดิม แต่ปรับ log ให้ชัดเจนขึ้น)
-  async checkResult(sessionId) {
+  // เช็คผลการเทรด
+  async checkTrackingResults() {
     try {
-      const session = await TrackingSession.findById(sessionId);
-      if (!session || session.status !== 'tracking') {
-        console.log(`Session ${sessionId} not found or not tracking`);
-        return;
+      const now = new Date();
+      console.log(`🔍 Checking tracking results at ${now.toISOString()}`);
+
+      // หา sessions ที่ต้องเช็คผล
+      const sessionsToCheck = await TrackingSession.find({
+        status: 'tracking',
+        nextCheckTime: { $lte: now }
+      }).populate('user');
+
+      console.log(`📊 Found ${sessionsToCheck.length} sessions to check`);
+
+      for (const session of sessionsToCheck) {
+        await this.processSession(session);
       }
 
-      const checkTime = session.getNextCheckTime();
-      console.log(`🔍 Checking result for ${session.pair} at ${checkTime} (Round ${session.currentRound})`);
+    } catch (error) {
+      console.error('Error checking tracking results:', error);
+    }
+  }
+
+  // ประมวลผล session แต่ละตัว
+  async processSession(session) {
+    try {
+      console.log(`🔄 Processing session: ${session.pair} ${session.prediction} Round ${session.currentRound}`);
+
+      // คำนวณเวลาที่ต้องเช็ค (entry time + current round * 5 minutes)
+      const checkTime = new Date(session.entryTime);
+      checkTime.setMinutes(checkTime.getMinutes() + (session.currentRound - 1) * 5);
+      
+      const timeString = checkTime.toLocaleTimeString('th-TH', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Bangkok'
+      });
+      
+      const dateString = checkTime.toISOString().split('T')[0];
 
       // ดึงข้อมูลแท่งเทียนจาก IQ Option
       const candleData = await iqOptionService.getCandleData(
         session.pair, 
-        session.entryTime,
-        session.entryDate.toISOString().split('T')[0]
+        timeString, 
+        dateString
       );
 
-      console.log(`📊 Candle data received:`, candleData);
-
-      const isCorrect = session.isWinCondition(candleData.color);
-      console.log(`🎯 Prediction: ${session.prediction}, Candle: ${candleData.color}, Correct: ${isCorrect}`);
+      // เพิ่มผลลัพธ์
+      const isCorrect = session.addResult(candleData);
       
-      // บันทึกผลลัพธ์
-      session.results.push({
-        round: session.currentRound,
-        checkTime,
-        candleColor: candleData.color,
-        openPrice: candleData.open,
-        closePrice: candleData.close,
-        isCorrect,
-        checkedAt: new Date()
-      });
-
       if (isCorrect) {
-        // ชนะแล้ว!
-        session.status = 'won';
-        session.wonAt = new Date();
-        await session.save();
-
-        console.log(`🎉 User won! Session ${sessionId} completed`);
-        await this.sendWinMessage(session);
+        // ถูก! จบการติดตาม
+        await this.completeSession(session, 'win');
       } else if (session.currentRound >= session.maxRounds) {
-        // แพ้ครบ 7 ตาแล้ว
-        session.status = 'lost';
-        session.lostAt = new Date();
-        await session.save();
-
-        console.log(`😔 User lost after ${session.maxRounds} rounds. Session ${sessionId} completed`);
-        await this.sendLoseMessage(session);
+        // ครบ 7 ตา แล้ว
+        await this.completeSession(session, 'max_rounds_reached');
       } else {
-        // ยังไม่ชนะ ต้องเช็คต่อ
-        session.currentRound += 1;
-        await session.save();
-
-        console.log(`⏳ Round ${session.currentRound - 1} failed, continuing to round ${session.currentRound}`);
-        await this.sendContinueMessage(session, candleData);
-        
-        // ตั้งเวลาเช็คครั้งถัดไป
-        this.scheduleNextCheck(session);
+        // ผิด ทำต่อ
+        await this.continueSession(session);
       }
 
-      // ลบ timeout ออกจาก map
-      this.activeChecks.delete(sessionId.toString());
-
     } catch (error) {
-      console.error('Error checking result:', error);
+      console.error(`Error processing session ${session._id}:`, error);
       
       // ส่งข้อความแจ้งข้อผิดพลาด
-      const session = await TrackingSession.findById(sessionId);
-      if (session) {
-        await lineService.pushMessage(session.lineUserId, {
-          type: 'text',
-          text: `❌ เกิดข้อผิดพลาดในการเช็คผล\n💡 ${error.message}\n🔄 กรุณาลองใหม่อีกครั้ง`
-        });
-        
-        // ยกเลิก session ที่เกิดข้อผิดพลาด
-        session.status = 'cancelled';
-        await session.save();
-      }
-      
-      // ลบ timeout ออกจาก map
-      this.activeChecks.delete(sessionId.toString());
-    }
-  }
-
-  // ส่งข้อความเมื่อชนะ
-  async sendWinMessage(session) {
-    const lastResult = session.results[session.results.length - 1];
-    const winMessage = `🎉 ยินดีด้วย! คุณชนะแล้ว!\n\n📊 ${session.pair} ${session.prediction}\n🕐 ตา ${session.currentRound}: ${lastResult.checkTime}\n📈 แท่งเทียน: ${lastResult.candleColor === 'green' ? '🟢 เขียว (ขึ้น)' : '🔴 แดง (ลง)'}\n💰 ราคา: ${lastResult.openPrice} → ${lastResult.closePrice}\n\n✅ การทำนายถูกต้อง!`;
-
-    await lineService.pushMessage(session.lineUserId, {
-      type: 'text',
-      text: winMessage
-    });
-
-    // ส่งการ์ดถามว่าจะเทรดต่อหรือไม่
-    const continueCard = createContinueTradingMessage();
-    await lineService.pushMessage(session.lineUserId, continueCard);
-  }
-
-  // ส่งข้อความเมื่อแพ้
-  async sendLoseMessage(session) {
-    const loseMessage = `😔 เสียใจด้วย ครั้งนี้ไม่ถูกต้อง\n\n📊 ${session.pair} ${session.prediction}\n🎲 ครบ ${session.maxRounds} ตาแล้ว\n\n📈 ผลสรุป:\n${session.results.map((r, i) => 
-      `ตา ${i+1}: ${r.candleColor === 'green' ? '🟢' : '🔴'} ${r.isCorrect ? '✅' : '❌'}`
-    ).join('\n')}\n\n💪 อย่าท้อแท้ ลองใหม่ในครั้งหน้า!`;
-
-    await lineService.pushMessage(session.lineUserId, {
-      type: 'text',
-      text: loseMessage
-    });
-
-    // ส่งการ์ดถามว่าจะเทรดต่อหรือไม่
-    const continueCard = createContinueTradingMessage();
-    await lineService.pushMessage(session.lineUserId, continueCard);
-  }
-
-  // ส่งข้อความระหว่างติดตาม
-  async sendContinueMessage(session, candleData) {
-    const prediction = session.prediction === 'CALL' ? 'ขึ้น' : 'ลง';
-    const candleText = candleData.color === 'green' ? '🟢 เขียว (ขึ้น)' : candleData.color === 'red' ? '🔴 แดง (ลง)' : '⚪ doji';
-    const isCorrect = session.isWinCondition(candleData.color);
-    
-    const message = `📊 ผลตา ${session.currentRound - 1}/${session.maxRounds}\n\n${session.pair} ${session.prediction}\n🕐 เวลา: ${session.results[session.results.length - 1].checkTime}\n📈 แท่งเทียน: ${candleText}\n💰 ราคา: ${candleData.open} → ${candleData.close}\n\n${isCorrect ? '✅ ถูกต้อง - ชนะแล้ว!' : '❌ ยังไม่ถูก - ' + prediction + ' ต่อ'}\n\n⏳ เช็คต่อในตาที่ ${session.currentRound} ในอีก 5 นาที`;
-
-    await lineService.pushMessage(session.lineUserId, {
-      type: 'text',
-      text: message
-    });
-  }
-
-  // ตรวจสอบว่าผู้ใช้มีการติดตามอยู่หรือไม่
-  async isUserTracking(userId) {
-    const session = await TrackingSession.findOne({
-      lineUserId: userId,
-      status: 'tracking'
-    });
-    return session !== null;
-  }
-
-  // ยกเลิกการติดตาม
-  async cancelTracking(userId) {
-    try {
-      const session = await TrackingSession.findOne({
-        lineUserId: userId,
-        status: 'tracking'
+      await lineService.pushMessage(session.lineUserId, {
+        type: 'text',
+        text: `❌ เกิดข้อผิดพลาดในการติดตามผล ${session.pair}\n\nError: ${error.message}\n\n💡 กรุณาลองเทรดใหม่อีกครั้ง`
       });
 
-      if (!session) {
-        throw new Error('ไม่พบการติดตามที่กำลังดำเนินการ');
-      }
-
-      session.status = 'cancelled';
-      await session.save();
-
-      // ยกเลิก scheduled check
-      const timeoutId = this.activeChecks.get(session._id.toString());
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this.activeChecks.delete(session._id.toString());
-      }
-
-      return session;
-    } catch (error) {
-      console.error('Error cancelling tracking:', error);
-      throw error;
+      // หยุดการติดตาม
+      await this.completeSession(session, 'failed');
     }
   }
 
-  // ดูสถิติการติดตาม
-  async getTrackingStats(userId) {
+  // ทำต่อไปยัง round ถัดไป
+  async continueSession(session) {
+    session.currentRound += 1;
+    session.calculateNextCheckTime();
+    await session.save();
+
+    const lastResult = session.results[session.results.length - 1];
+    const continueMessage = this.createContinueMessage(session, lastResult);
+    
+    await lineService.pushMessage(session.lineUserId, continueMessage);
+    console.log(`➡️ Continue tracking: ${session.pair} Round ${session.currentRound}`);
+  }
+
+  // จบการติดตาม
+  async completeSession(session, finalResult) {
+    session.status = 'completed';
+    session.finalResult = finalResult;
+    session.completedAt = new Date();
+    await session.save();
+
+    const completionMessage = this.createCompletionMessage(session);
+    await lineService.pushMessage(session.lineUserId, completionMessage);
+    
+    console.log(`✅ Completed tracking: ${session.pair} Result: ${finalResult}`);
+  }
+
+  // ตรวจสอบว่าผู้ใช้มี active tracking หรือไม่
+  async hasActiveTracking(lineUserId) {
+    const activeSession = await TrackingSession.findOne({
+      lineUserId,
+      status: 'tracking'
+    });
+    return !!activeSession;
+  }
+
+  // ยกเลิกการติดตาม (ถ้าต้องการ)
+  async cancelTracking(lineUserId) {
+    const session = await TrackingSession.findOne({
+      lineUserId,
+      status: 'tracking'
+    });
+
+    if (session) {
+      session.status = 'completed';
+      session.finalResult = 'cancelled';
+      session.completedAt = new Date();
+      await session.save();
+      return true;
+    }
+    return false;
+  }
+
+  // สร้างข้อความเริ่มติดตาม
+  createTrackingStartMessage(session) {
+    const nextCheckTime = session.nextCheckTime.toLocaleString('th-TH', { 
+      year: 'numeric',
+      month: '2-digit', 
+      day: '2-digit',
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'Asia/Bangkok'
+    });
+
+    return {
+      type: 'text',
+      text: `🎯 เริ่มติดตามผล\n\n📊 ${session.pair} (M5)\n🎲 ทำนาย: ${session.prediction}\n⏰ เข้าเทรด: ${session.entryTimeString}\n🔍 เช็คผลครั้งแรก: ${nextCheckTime}\n\n📈 ระบบจะติดตามผลอัตโนมัติและแจ้งให้ทราบ\n⚠️ ระหว่างนี้ไม่สามารถเลือกคู่เงินใหม่ได้`
+    };
+  }
+
+  // สร้างข้อความทำต่อ
+  createContinueMessage(session, lastResult) {
+    const wrongResultText = session.prediction === 'CALL' ? 
+      `แท่งเทียนปิดสีแดง (ลง) ≠ CALL` : 
+      `แท่งเทียนปิดสีเขียว (ขึ้น) ≠ PUT`;
+
+    const nextAction = session.prediction === 'CALL' ? 'CALL' : 'PUT';
+    const nextTime = session.nextCheckTime.toLocaleTimeString('th-TH', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Bangkok'
+    });
+
+    return {
+      type: 'text',
+      text: `📊 ${session.pair} (M5) - Round ${session.currentRound - 1}\n\n❌ ผลยังไม่ถูกต้อง\n${wrongResultText}\n\n🔄 ทำต่อ ${nextAction} เวลา ${nextTime}\n📈 เช็คผลรอบถัดไป: ${session.nextCheckTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}\n\n⏳ รอบ ${session.currentRound}/${session.maxRounds}`
+    };
+  }
+
+  // สร้างข้อความจบการติดตาม
+  createCompletionMessage(session) {
+    if (session.finalResult === 'win') {
+      const lastResult = session.results[session.results.length - 1];
+      const correctResultText = session.prediction === 'CALL' ? 
+        `แท่งเทียนปิดสีเขียว (ขึ้น) = CALL ถูกต้อง! 🎯` : 
+        `แท่งเทียนปิดสีแดง (ลง) = PUT ถูกต้อง! 🎯`;
+
+      return [
+        {
+          type: 'text',
+          text: `🎉 ยินดีด้วย! ชนะแล้ว!\n\n📊 ${session.pair} (M5)\n✅ ${correctResultText}\n🏆 ชนะในรอบที่ ${session.currentRound}\n\n🎯 การทำนายของ AI แม่นยำ!`
+        },
+        createContinueTradeMessage()
+      ];
+    } else {
+      return [
+        {
+          type: 'text',
+          text: `😔 เสียใจด้วย ครบ ${session.maxRounds} รอบแล้ว\n\n📊 ${session.pair} (M5)\n❌ ไม่สามารถทำนายถูกต้องได้\n\n💡 ลองเทรดคู่เงินอื่นดูไหม?`
+        },
+        createContinueTradeMessage()
+      ];
+    }
+  }
+
+  // รายงานสถิติ
+  async getTrackingStats(lineUserId) {
     const stats = await TrackingSession.aggregate([
-      { $match: { lineUserId: userId } },
+      { $match: { lineUserId } },
       {
         $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-          avgRounds: { $avg: '$currentRound' }
+          _id: null,
+          totalSessions: { $sum: 1 },
+          wins: { $sum: { $cond: [{ $eq: ["$finalResult", "win"] }, 1, 0] } },
+          loses: { $sum: { $cond: [{ $ne: ["$finalResult", "win"] }, 1, 0] } },
+          avgRounds: { $avg: "$currentRound" }
         }
       }
     ]);
-
-    return {
-      total: await TrackingSession.countDocuments({ lineUserId: userId }),
-      won: stats.find(s => s._id === 'won')?.count || 0,
-      lost: stats.find(s => s._id === 'lost')?.count || 0,
-      cancelled: stats.find(s => s._id === 'cancelled')?.count || 0,
-      tracking: stats.find(s => s._id === 'tracking')?.count || 0
-    };
+    
+    return stats[0] || { totalSessions: 0, wins: 0, loses: 0, avgRounds: 0 };
   }
 }
 

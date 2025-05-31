@@ -1,58 +1,17 @@
-//AI-Server/services/iqOptionService.js
+//AI-Server/services/iqOptionService.js - Service ใหม่สำหรับเรียก IQ Option API
 const { exec } = require('child_process');
 const path = require('path');
 
 class IQOptionService {
   constructor() {
-    this.pythonScript = path.join(__dirname, '..', 'scripts', 'iq_candle_checker.py');
+    this.pythonScript = path.join(__dirname, '../scripts/iq_candle_checker.py');
   }
 
-  // ดึงข้อมูลแท่งเทียนที่เวลาที่กำหนด
-  async getCandleData(symbol, targetTime, targetDate = null) {
-    return new Promise((resolve, reject) => {
-      // แปลง symbol ให้เป็นรูปแบบของ IQ Option
-      const iqSymbol = this.convertToIQSymbol(symbol);
-      
-      // สร้าง command สำหรับ Python
-      const command = `python "${this.pythonScript}" "${iqSymbol}" "${targetTime}" "${targetDate || ''}"`;
-      
-      console.log(`🔍 Checking candle: ${symbol} at ${targetTime}`);
-      console.log(`Command: ${command}`);
-      
-      exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`❌ Python error: ${error.message}`);
-          reject(new Error(`Failed to get candle data: ${error.message}`));
-          return;
-        }
-        
-        if (stderr) {
-          console.error(`⚠️ stderr: ${stderr}`);
-        }
-
-        try {
-          const result = JSON.parse(stdout);
-          console.log("✅ ได้ข้อมูลแท่งเทียน:", result);
-          
-          if (result.error) {
-            reject(new Error(result.error));
-          } else {
-            resolve(result);
-          }
-        } catch (parseError) {
-          console.error(`❌ แปลง JSON ไม่ได้: ${parseError}`);
-          console.log("stdout:\n", stdout);
-          reject(new Error(`Failed to parse response: ${parseError.message}`));
-        }
-      });
-    });
-  }
-
-  // แปลงชื่อคู่เงินให้เป็นรูปแบบของ IQ Option
-  convertToIQSymbol(symbol) {
-    const symbolMap = {
+  // แปลงชื่อคู่เงินเป็นรูปแบบของ IQ Option
+  convertPairToSymbol(pair) {
+    const mapping = {
       'EUR/USD': 'EURUSD',
-      'GBP/USD': 'GBPUSD',
+      'GBP/USD': 'GBPUSD', 
       'USD/JPY': 'USDJPY',
       'USD/CHF': 'USDCHF',
       'AUD/USD': 'AUDUSD',
@@ -62,17 +21,65 @@ class IQOptionService {
       'EUR/JPY': 'EURJPY',
       'GBP/JPY': 'GBPJPY',
       'BTC/USD': 'BTCUSD',
-      'GOLD': 'XAUUSD'
+      'GOLD': 'GOLD'
     };
-    
-    return symbolMap[symbol] || symbol;
+    return mapping[pair] || pair;
   }
 
-  // ทดสอบการเชื่อมต่อ
+  // ดึงข้อมูลแท่งเทียน
+  async getCandleData(pair, targetTime, targetDate = null) {
+    return new Promise((resolve, reject) => {
+      const symbol = this.convertPairToSymbol(pair);
+      const timeString = targetTime; // "13:45"
+      const dateString = targetDate || new Date().toISOString().split('T')[0]; // "2025-05-30"
+      
+      // สร้างคำสั่ง Python พร้อม arguments
+      const command = `python "${this.pythonScript}" "${symbol}" "${timeString}" "${dateString}"`;
+      
+      console.log(`🐍 Executing Python: ${command}`);
+      
+      exec(command, { timeout: 30000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`❌ Python error: ${error.message}`);
+          return reject(new Error(`Python execution failed: ${error.message}`));
+        }
+        
+        if (stderr) {
+          console.error(`⚠️ Python stderr: ${stderr}`);
+        }
+
+        try {
+          const result = JSON.parse(stdout);
+          console.log("✅ IQ Option API result:", result);
+          
+          if (result.error) {
+            return reject(new Error(result.error));
+          }
+          
+          resolve(result);
+        } catch (parseError) {
+          console.error(`❌ JSON parse error: ${parseError}`);
+          console.log("Python stdout:", stdout);
+          reject(new Error(`Failed to parse Python output: ${parseError.message}`));
+        }
+      });
+    });
+  }
+
+  // ทดสอบการเชื่อมต่อ IQ Option
   async testConnection() {
     try {
-      const result = await this.getCandleData('BTC/USD', '09:00');
-      return { success: true, data: result };
+      // ใช้ BTC/USD เวลาปัจจุบันเพื่อทดสอบ
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('th-TH', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false,
+        timeZone: 'Asia/Bangkok'
+      });
+      
+      const result = await this.getCandleData('BTC/USD', timeString);
+      return { success: true, result };
     } catch (error) {
       return { success: false, error: error.message };
     }
