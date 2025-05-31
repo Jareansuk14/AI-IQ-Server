@@ -2003,7 +2003,7 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "🎯 เทรดต่อไหม?",
+            text: "🎯 ต้องการเทรดต่อไหม?",
             weight: "bold",
             color: "#ffffff",
             size: "lg",
@@ -2019,11 +2019,11 @@ function createContinueTradeMessage() {
         contents: [
           {
             type: "text",
-            text: "การติดตามผลเสร็จสิ้นแล้ว",
-            size: "md",
+            text: "✨ พร้อมสำหรับการวิเคราะห์ครั้งต่อไป",
             color: "#ffffff",
+            size: "md",
             align: "center",
-            margin: "md"
+            margin: "lg"
           },
           {
             type: "separator",
@@ -2032,15 +2032,15 @@ function createContinueTradeMessage() {
           },
           {
             type: "text",
-            text: "ต้องการวิเคราะห์คู่เงินใหม่หรือไม่?",
-            size: "sm",
+            text: "📈 เลือกคู่เงินใหม่และเริ่มการวิเคราะห์\nหรือหยุดพักและกลับมาใหม่ภายหลัง",
             color: "#8c8c8c",
-            align: "center",
+            size: "sm",
             wrap: true,
-            margin: "xl"
+            align: "center",
+            margin: "lg"
           }
         ],
-        spacing: "sm",
+        spacing: "md",
         paddingAll: "20px",
         backgroundColor: "#1f1f1f"
       },
@@ -2051,11 +2051,11 @@ function createContinueTradeMessage() {
           {
             type: "button",
             style: "primary",
-            height: "sm",
+            height: "md",
             action: {
               type: "postback",
-              label: "✅ เทรดต่อ",
-              data: "action=continue_trade&answer=yes"
+              label: "🚀 เทรดต่อ",
+              data: "action=continue_trade"
             },
             color: "#49aa19"
           },
@@ -2065,8 +2065,8 @@ function createContinueTradeMessage() {
             height: "sm",
             action: {
               type: "postback",
-              label: "❌ พอแล้ว",
-              data: "action=continue_trade&answer=no"
+              label: "🛑 หยุดพัก",
+              data: "action=stop_trade"
             },
             margin: "sm"
           }
@@ -2086,5 +2086,5 @@ module.exports = {
   createPaymentSuccessMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage  // เพิ่มบรรทัดนี้
+  createContinueTradeMessage  // เพิ่มฟังก์ชันใหม่
 };
