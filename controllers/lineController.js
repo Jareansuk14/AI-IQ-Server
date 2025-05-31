@@ -296,7 +296,7 @@ const handlePostbackEvent = async (event) => {
           }
 
           // สร้างคำถามสำหรับ AI
-          const aiQuestion = `ในคู่เงิน ${forexPair} ตอนนี้ควร CALL หรือ PUT ไปเช็คกราฟจากเว็บต่างๆให้หน่อย ตอบมาสั้นๆแค่ CALL หรือ PUT`;
+          const aiQuestion = `ในคู่เงิน ${forexPair} ตอนนี้ควร CALL หรือ PUT ไปเช็คกราฟจากเว็บต่างๆให้หน่อย โดยใช้เทคนิค EMA+BB+Stoch ตอบมาสั้นๆแค่ CALL หรือ PUT`;
           
           console.log('Sending forex question to AI:', aiQuestion);
           
