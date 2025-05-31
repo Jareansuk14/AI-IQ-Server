@@ -161,17 +161,12 @@ def get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz):
     try:
         print(f"Debug: Fetching data for {yahoo_symbol}", file=sys.stderr)
         
-        # ใช้เวลาปัจจุบันแทนเวลาในอนาคต
-        now_utc = datetime.now(pytz.utc)
-        target_timestamp = int(now_utc.timestamp())
-        
-        print(f"Debug: Using current time instead of future time", file=sys.stderr)
-        print(f"Debug: Current UTC: {now_utc}", file=sys.stderr)
-        
         # คำนวณช่วงเวลาสำหรับดึงข้อมูล (UTC timestamps)
+        target_timestamp = int(utc_dt.timestamp())
+        
         # ขยายช่วงเวลาออกไป เพื่อให้แน่ใจว่าได้ข้อมูล
-        end_time = target_timestamp + (3600 * 2)   # +2 ชั่วโมง
-        start_time = target_timestamp - (3600 * 12) # -12 ชั่วโมง
+        end_time = target_timestamp + (3600 * 12)  # +12 ชั่วโมง
+        start_time = target_timestamp - (3600 * 12)  # -12 ชั่วโมง
         
         # สร้าง URL สำหรับ Yahoo Finance API
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}"
@@ -184,7 +179,7 @@ def get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz):
         }
         
         print(f"Debug: Fetching from Yahoo API: {url}", file=sys.stderr)
-        print(f"Debug: Time range: {start_time} to {end_time}", file=sys.stderr)
+        print(f"Debug: Target timestamp: {target_timestamp}", file=sys.stderr)
         
         # เรียก API
         headers = {
@@ -214,26 +209,51 @@ def get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz):
         
         print(f"Debug: Got {len(timestamps)} data points", file=sys.stderr)
         
-        # หาแท่งเทียนล่าสุดที่มีข้อมูลครบ
-        latest_index = None
+        # ค้นหาแท่งเทียนที่เวลาตรงกับ target_timestamp (เหมือนโค้ดตัวอย่าง)
+        exact_match_index = None
         
-        for i in range(len(timestamps) - 1, -1, -1):  # วนจากท้ายไปหน้า
-            if (timestamps[i] is not None and 
+        # หาแท่งที่เวลาตรงกันพอดี
+        for i, ts in enumerate(timestamps):
+            if (ts is not None and 
                 opens[i] is not None and 
                 closes[i] is not None and
-                timestamps[i] <= target_timestamp):  # ต้องไม่เป็นอนาคต
-                latest_index = i
+                ts == target_timestamp):
+                exact_match_index = i
                 break
         
-        if latest_index is None:
-            print(f"Debug: No valid candle found", file=sys.stderr)
-            return None
-        
-        time_diff = target_timestamp - timestamps[latest_index]
-        print(f"Debug: Found latest candle at index {latest_index}, age: {time_diff} seconds", file=sys.stderr)
+        if exact_match_index is not None:
+            print(f"Debug: Found exact match at index {exact_match_index}", file=sys.stderr)
+            use_index = exact_match_index
+        else:
+            # ถ้าไม่พบเวลาตรงกัน ให้หาเวลาที่ใกล้เคียงที่สุด
+            print(f"Debug: Exact time not found, searching for closest", file=sys.stderr)
+            
+            closest_index = None
+            min_diff = float('inf')
+            
+            for i, ts in enumerate(timestamps):
+                if ts is None or opens[i] is None or closes[i] is None:
+                    continue
+                    
+                diff = abs(ts - target_timestamp)
+                if diff < min_diff:
+                    min_diff = diff
+                    closest_index = i
+            
+            if closest_index is None:
+                print(f"Debug: No valid candle found", file=sys.stderr)
+                return None
+            
+            # ตรวจสอบว่าใกล้เคียงพอหรือไม่ (ใน 5 นาที = 300 วินาที)
+            if min_diff <= 300:
+                print(f"Debug: Found closest match at index {closest_index}, diff: {min_diff} seconds", file=sys.stderr)
+                use_index = closest_index
+            else:
+                print(f"Debug: No candle within 5 minutes found (diff: {min_diff}s)", file=sys.stderr)
+                return None
         
         # แปลงเวลากลับเป็น timezone ไทย
-        candle_timestamp = timestamps[latest_index]
+        candle_timestamp = timestamps[use_index]
         candle_utc = datetime.fromtimestamp(candle_timestamp, tz=pytz.utc)
         candle_thai = candle_utc.astimezone(thai_tz)
         
@@ -241,9 +261,9 @@ def get_yahoo_candle_data(yahoo_symbol, utc_dt, thai_tz):
         
         # ส่งคืนข้อมูลแท่งเทียน
         return {
-            'open': opens[latest_index],
-            'close': closes[latest_index],
-            'volume': volumes[latest_index] if volumes[latest_index] is not None else 0,
+            'open': opens[use_index],
+            'close': closes[use_index],
+            'volume': volumes[use_index] if volumes[use_index] is not None else 0,
             'thai_time': candle_thai.strftime('%Y-%m-%d %H:%M'),
             'timestamp': candle_timestamp
         }

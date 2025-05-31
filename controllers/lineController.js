@@ -160,14 +160,24 @@ const handleSpecialCommand = async (event) => {
         const referralCode = await creditService.getReferralCode(userId);
         const userName = profile?.displayName || 'คุณ';
         
-        // สร้างข้อความเชิญที่จะแชร์
-        const invitationText = `🎁 ${userName} เชิญคุณใช้บริการ AI วิเคราะห์รูปภาพฟรี!\n\n✨ ใช้รหัสเชิญ: ${referralCode}\nรับเครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)\n\n📱 เพิ่มเพื่อน AI Bot: https://line.me/R/ti/p/@033mebpp\n📝 หลังเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${referralCode}\n\n🚀 AI วิเคราะห์รูปภาพ + Forex ฟรี!\n💰 แชร์ต่อเพื่อรับ 10 เครดิตฟรี!`;
+        // 🔧 สร้างข้อความเชิญที่สั้นลง (เพื่อไม่ให้ URL ยาวเกินไป)
+        const invitationText = `🎁 ${userName} เชิญใช้ AI Bot ฟรี!\n\n✨ รหัส: ${referralCode}\n🎁 รับ 5 เครดิตฟรี\n\n📱 เพิ่มเพื่อน: https://line.me/R/ti/p/@033mebpp\n📝 พิมพ์: รหัส:${referralCode}\n\n🚀 ลองเลย!`;
         
-        // สร้าง Share URI ของ LINE (ทำงานได้ในมือถือ)
+        // ตรวจสอบความยาวก่อน encode
         const shareText = encodeURIComponent(invitationText);
         const lineShareURL = `https://line.me/R/share?text=${shareText}`;
         
-        // สร้าง Flex Message พร้อมตัวเลือกแชร์หลากหลาย
+        console.log('Share URL length:', lineShareURL.length); // เพื่อ debug
+        
+        // หาก URL ยาวเกิน 1000 ตัวอักษร ให้ใช้ข้อความสั้นกว่า
+        let finalShareURL = lineShareURL;
+        if (lineShareURL.length > 1000) {
+          const shortText = `🎁 AI Bot ฟรี! รหัส: ${referralCode} https://line.me/R/ti/p/@033mebpp พิมพ์: รหัส:${referralCode}`;
+          finalShareURL = `https://line.me/R/share?text=${encodeURIComponent(shortText)}`;
+          console.log('Using short URL, length:', finalShareURL.length);
+        }
+        
+        // สร้าง Flex Message พร้อมตัวเลือกแชร์
         const shareMessage = {
           type: "flex",
           altText: `แชร์รหัสเชิญ ${referralCode} ให้เพื่อน`,
@@ -230,7 +240,7 @@ const handleSpecialCommand = async (event) => {
                 },
                 {
                   type: "text",
-                  text: "🎯 เลือกวิธีแชร์ที่ชอบ:",
+                  text: "🎯 เลือกวิธีแชร์:",
                   weight: "bold",
                   size: "sm",
                   color: "#2c2c2c",
@@ -245,25 +255,25 @@ const handleSpecialCommand = async (event) => {
               type: "box",
               layout: "vertical",
               contents: [
-                // ปุ่มแชร์หลัก - เปิด LINE Share (แนะนำ)
+                // ปุ่มแชร์หลัก - ใช้ URL ที่ปรับแล้ว
                 {
                   type: "button",
                   style: "primary",
                   action: {
                     type: "uri",
-                    label: "📤 เลือกเพื่อนใน LINE (แนะนำ)",
-                    uri: lineShareURL
+                    label: "📤 เลือกเพื่อนใน LINE",
+                    uri: finalShareURL
                   },
                   color: "#4ecdc4",
                   height: "sm"
                 },
-                // ปุ่มคัดลอกข้อความ
+                // ปุ่มคัดลอกข้อความ (ปลอดภัยกว่า)
                 {
                   type: "button",
                   style: "secondary",
                   action: {
                     type: "postback",
-                    label: "📋 คัดลอกข้อความเชิญ",
+                    label: "📋 คัดลอกข้อความ",
                     data: `action=copy_share_text&referral_code=${referralCode}&inviter_name=${encodeURIComponent(userName)}`
                   },
                   height: "sm",
@@ -275,7 +285,7 @@ const handleSpecialCommand = async (event) => {
                   style: "secondary",
                   action: {
                     type: "postback",
-                    label: "🎨 ได้การ์ดเชิญสวยๆ",
+                    label: "🎨 การ์ดสวยๆ",
                     data: `action=get_invitation_card&referral_code=${referralCode}&inviter_name=${encodeURIComponent(userName)}`
                   },
                   height: "sm",
@@ -283,7 +293,7 @@ const handleSpecialCommand = async (event) => {
                 },
                 {
                   type: "text",
-                  text: "💰 ทุกการแนะนำสำเร็จ = 10 เครดิตฟรี",
+                  text: "💰 แนะนำสำเร็จ = 10 เครดิตฟรี",
                   size: "xs",
                   color: "#999999",
                   align: "center",
@@ -494,11 +504,27 @@ const handlePostbackEvent = async (event) => {
         const copyInviterName = decodeURIComponent(params.get('inviter_name') || 'เพื่อน');
         
         try {
-          const shareText = `🎁 ${copyInviterName} เชิญคุณใช้บริการ AI วิเคราะห์รูปภาพฟรี!\n\n✨ ใช้รหัสเชิญ: ${copyReferralCode}\nรับเครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)\n\n📱 เพิ่มเพื่อน AI Bot: https://line.me/R/ti/p/@033mebpp\n📝 หลังเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${copyReferralCode}\n\n🚀 AI วิเคราะห์รูปภาพ + Forex ฟรี!\n💰 แชร์ต่อเพื่อรับ 10 เครดิตฟรี!`;
+          // ข้อความเต็มสำหรับการคัดลอก (ไม่มีข้อจำกัด URL)
+          const fullShareText = `🎁 ${copyInviterName} เชิญคุณใช้บริการ AI วิเคราะห์รูปภาพฟรี!
+      
+      ✨ ใช้รหัสเชิญ: ${copyReferralCode}
+      🎁 รับเครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)
+      
+      📱 เพิ่มเพื่อน AI Bot: 
+      https://line.me/R/ti/p/@033mebpp
+      
+      📝 หลังเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${copyReferralCode}
+      
+      🚀 ฟีเจอร์:
+      • AI วิเคราะห์รูปภาพ
+      • วิเคราะห์ Forex Real-time  
+      • เครดิตฟรีเพียบ
+      
+      💰 แชร์ต่อรับ 10 เครดิตฟรี!`;
           
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: `📋 คัดลอกข้อความด้านล่างแล้วส่งให้เพื่อน:\n\n─────────────────\n${shareText}\n─────────────────\n\n💡 วิธีส่ง:\n• คัดลอกข้อความด้านบน\n• ไปที่แชท LINE ของเพื่อน\n• วางข้อความแล้วส่ง\n• หรือส่งผ่าน Facebook, WhatsApp ก็ได้!`
+            text: `📋 คัดลอกข้อความด้านล่างแล้วส่งให้เพื่อน:\n\n─────────────────\n${fullShareText}\n─────────────────\n\n💡 วิธีส่ง:\n• คัดลอกข้อความด้านบน\n• ไปที่แชท LINE ของเพื่อน\n• วางข้อความแล้วส่ง\n• หรือส่งผ่าน Facebook, WhatsApp ก็ได้!`
           });
         } catch (error) {
           console.error('Error copying share text:', error);
