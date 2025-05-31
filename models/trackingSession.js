@@ -1,4 +1,4 @@
-//AI-Server/models/trackingSession.js
+//AI-Server/models/trackingSession.js - แก้ไข validation
 const mongoose = require('mongoose');
 
 const TrackingSessionSchema = new mongoose.Schema({
@@ -76,6 +76,22 @@ TrackingSessionSchema.methods.isWinCondition = function(candleColor) {
   if (this.prediction === 'CALL' && candleColor === 'green') return true;
   if (this.prediction === 'PUT' && candleColor === 'red') return true;
   return false;
+};
+
+// เพิ่ม method สำหรับ debug
+TrackingSessionSchema.methods.getDebugInfo = function() {
+  return {
+    id: this._id,
+    pair: this.pair,
+    prediction: this.prediction,
+    entryTime: this.entryTime,
+    currentRound: this.currentRound,
+    maxRounds: this.maxRounds,
+    status: this.status,
+    nextCheckTime: this.getNextCheckTime(),
+    hasUser: !!this.user,
+    lineUserId: this.lineUserId
+  };
 };
 
 module.exports = mongoose.model('TrackingSession', TrackingSessionSchema);

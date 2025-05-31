@@ -1,5 +1,7 @@
-//AI-Server/services/trackingService.js
+//AI-Server/services/trackingService.js - แก้ไข error User ObjectId
+
 const TrackingSession = require('../models/trackingSession');
+const User = require('../models/user'); // เพิ่มบรรทัดนี้
 const iqOptionService = require('./iqOptionService');
 const lineService = require('./lineService');
 const { createTrackingResultMessage, createContinueTradingMessage } = require('../utils/flexMessages');
@@ -9,7 +11,7 @@ class TrackingService {
     this.activeChecks = new Map(); // เก็บ setTimeout IDs
   }
 
-  // เริ่มติดตามผลการเทรด
+  // เริ่มติดตามผลการเทรด (แก้ไขเพื่อดึง User ObjectId)
   async startTracking(userId, pair, prediction, entryTime) {
     try {
       console.log(`🎯 Starting tracking for ${userId}: ${pair} ${prediction} at ${entryTime}`);
@@ -24,8 +26,15 @@ class TrackingService {
         throw new Error('คุณมีการติดตามผลอยู่แล้ว กรุณารอจนกว่าจะเสร็จสิ้น');
       }
 
-      // สร้าง tracking session ใหม่
+      // ดึงข้อมูล User จาก lineUserId เพื่อเอา ObjectId
+      const user = await User.findOne({ lineUserId: userId });
+      if (!user) {
+        throw new Error('ไม่พบข้อมูลผู้ใช้');
+      }
+
+      // สร้าง tracking session ใหม่ (เพิ่ม user ObjectId)
       const session = new TrackingSession({
+        user: user._id,  // เพิ่มบรรทัดนี้
         lineUserId: userId,
         pair,
         prediction,
@@ -60,8 +69,8 @@ class TrackingService {
     const checkDate = new Date(session.entryDate);
     checkDate.setHours(hours, minutes, 0, 0);
     
-    // ถ้าเวลาที่จะเช็คผ่านไปแล้ว ให้เช็คทันที
-    const delay = Math.max(0, checkDate.getTime() - now.getTime());
+    // ถ้าเวลาที่จะเช็คผ่านไปแล้ว ให้เช็คทันที (เพิ่ม minimum delay 10 วินาที)
+    const delay = Math.max(10000, checkDate.getTime() - now.getTime()); // อย่างน้อย 10 วินาที
     
     console.log(`⏰ Next check scheduled for ${nextCheckTime} (in ${delay/1000} seconds)`);
     
