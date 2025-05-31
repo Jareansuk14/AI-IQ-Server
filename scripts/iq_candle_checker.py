@@ -2,6 +2,7 @@
 # AI-Server/scripts/iq_candle_checker.py
 import sys
 import io
+import os
 import time
 import json
 from iqoptionapi.stable_api import IQ_Option
@@ -11,8 +12,9 @@ from datetime import datetime, timedelta
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # 🔐 ใส่ข้อมูลบัญชีของคุณที่นี่
-USERNAME = "gerbera.ville@gmail.com"
-PASSWORD = "Thefinal14"
+USERNAME = os.getenv('IQ_USERNAME', 'gerbera.ville@gmail.com')
+PASSWORD = os.getenv('IQ_PASSWORD', 'Thefinal14')
+print(f"Debug: Trying to connect with {USERNAME}", file=sys.stderr)
 
 def main():
     try:
@@ -134,6 +136,7 @@ def calculate_target_time(entry_time_str, round_num):
     except Exception as e:
         print(f"❌ Error calculating target time: {e}", file=sys.stderr)
         return None
+    
 
 if __name__ == "__main__":
     main()
