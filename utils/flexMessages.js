@@ -1896,7 +1896,7 @@ function createForexPairsMessage() {
               },
               {
                 type: "text",
-                text: "Gold Commodity Trading",
+                text: "Gold vs US Dollar",
                 size: "xs",
                 color: "#8c8c8c",
                 wrap: true,
@@ -2045,7 +2045,7 @@ function createContinueTradeMessage() {
             contents: [
               {
                 type: "text",
-                text: "📊 เลือกคู่เงินใหม่เพื่อวิเคราะห์",
+                text: "💰 เลือกคู่เงินใหม่เพื่อวิเคราะห์",
                 color: "#8c8c8c",
                 size: "sm",
                 align: "center",

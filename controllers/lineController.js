@@ -317,8 +317,8 @@ const handlePostbackEvent = async (event) => {
           const remainingCredits = await creditService.checkCredit(userId);
           
           // สร้างข้อความตามรูปแบบที่ต้องการ
-          const formattedPair = `${forexPair} (M5)`;
-          const responseText = `${formattedPair}\nผลการวิเคราะห์: ${prediction}\nเข้าเทรดตอน: ${targetTime}\nเครดิตคงเหลือ: ${remainingCredits} เครดิต`;
+          const formattedPair = `💰 ${forexPair} (M5)`;
+          const responseText = `${formattedPair}\n💡 ผลการวิเคราะห์: ${prediction}\n⏰ เข้าเทรดตอน: ${targetTime}\n💎 เครดิตคงเหลือ: ${remainingCredits} เครดิต`;
           
           console.log('Sending response with image and text');
           
