@@ -22,66 +22,83 @@ class IQOptionService {
         console.log(`🔧 Command: ${command}`);
 
         exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
-          if (error) {
-            console.error(`❌ Python execution error: ${error.message}`);
-            resolve({
-              error: `ไม่สามารถเชื่อมต่อ IQ Option ได้: ${error.message}`,
-              pair: iqPair,
-              entryTime,
-              round
-            });
-            return;
-          }
-
-          if (stderr) {
-            console.error(`⚠️ Python stderr: ${stderr}`);
-            // ถึงแม้จะมี stderr แต่อาจมี stdout ที่ใช้ได้
-          }
-
-          try {
-            console.log(`📤 Python stdout:`, stdout);
+            console.log(`🔍 Debug Info:`);
+            console.log(`📂 Working Dir: ${process.cwd()}`);
+            console.log(`🐍 Python Path: ${this.pythonScriptPath}`);
+            console.log(`✅ File Exists: ${require('fs').existsSync(this.pythonScriptPath)}`);
             
-            // แปลง JSON result
-            const result = JSON.parse(stdout.trim());
-            
-            if (result.error) {
-              console.error(`❌ IQ Option API error: ${result.error}`);
+            if (error) {
+              console.error(`❌ Error Code: ${error.code}`);
+              console.error(`❌ Error Signal: ${error.signal}`);
+              console.error(`❌ Error Message: ${error.message}`);
+              
+              // ทดสอบ Python version และ location
+              exec('python --version', (err, out) => {
+                console.log(`🐍 Python Version: ${out || err}`);
+              });
+              
+              exec('which python', (err, out) => {
+                console.log(`📍 Python Location: ${out || err}`);
+              });
+              
               resolve({
-                error: result.error,
+                error: `ไม่สามารถเชื่อมต่อ IQ Option ได้: ${error.message}`,
                 pair: iqPair,
                 entryTime,
                 round
               });
               return;
             }
-
-            console.log(`✅ Successfully got candle data:`, result);
-            
-            resolve({
-              pair: result.symbol || iqPair,
-              time: result.time,
-              candleSize: result.candle_size,
-              open: result.open,
-              close: result.close,
-              color: result.color, // 'green', 'red', หรือ 'doji'
-              round,
-              entryTime,
-              timestamp: new Date().toISOString()
-            });
-
-          } catch (parseError) {
-            console.error(`❌ JSON parse error: ${parseError.message}`);
-            console.log(`📝 Raw stdout:`, stdout);
-            
-            resolve({
-              error: `ไม่สามารถแปลงข้อมูลได้: ${parseError.message}`,
-              rawOutput: stdout,
-              pair: iqPair,
-              entryTime,
-              round
-            });
-          }
-        });
+          
+            if (stderr) {
+              console.error(`⚠️ Python stderr (รายละเอียด): ${stderr}`);
+              // ถึงแม้จะมี stderr แต่อาจมี stdout ที่ใช้ได้
+            }
+          
+            console.log(`📤 Python stdout: "${stdout}"`);
+          
+            try {
+              // แปลง JSON result
+              const result = JSON.parse(stdout.trim());
+              
+              if (result.error) {
+                console.error(`❌ IQ Option API error: ${result.error}`);
+                resolve({
+                  error: result.error,
+                  pair: iqPair,
+                  entryTime,
+                  round
+                });
+                return;
+              }
+          
+              console.log(`✅ Successfully got candle data:`, result);
+              
+              resolve({
+                pair: result.symbol || iqPair,
+                time: result.time,
+                candleSize: result.candle_size,
+                open: result.open,
+                close: result.close,
+                color: result.color, // 'green', 'red', หรือ 'doji'
+                round,
+                entryTime,
+                timestamp: new Date().toISOString()
+              });
+          
+            } catch (parseError) {
+              console.error(`❌ JSON parse error: ${parseError.message}`);
+              console.log(`📝 Raw stdout: "${stdout}"`);
+              
+              resolve({
+                error: `ไม่สามารถแปลงข้อมูลได้: ${parseError.message}`,
+                rawOutput: stdout,
+                pair: iqPair,
+                entryTime,
+                round
+              });
+            }
+          });
 
       } catch (err) {
         console.error(`❌ Unexpected error in getCandleColor: ${err.message}`);
