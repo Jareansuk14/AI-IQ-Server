@@ -1,7 +1,9 @@
-//AI-Server/services/trackingService.js
+//AI-Server/services/trackingService.js - แก้ไขฟังก์ชัน startTracking
+
 const TrackingSession = require('../models/trackingSession');
 const iqOptionService = require('./iqOptionService');
 const lineService = require('./lineService');
+const User = require('../models/user'); // เพิ่มบรรทัดนี้
 const { createTrackingResultMessage, createContinueTradingMessage } = require('../utils/flexMessages');
 
 class TrackingService {
@@ -9,10 +11,16 @@ class TrackingService {
     this.activeChecks = new Map(); // เก็บ setTimeout IDs
   }
 
-  // เริ่มติดตามผลการเทรด
+  // เริ่มติดตามผลการเทรด (แก้ไขแล้ว)
   async startTracking(userId, pair, prediction, entryTime) {
     try {
       console.log(`🎯 Starting tracking for ${userId}: ${pair} ${prediction} at ${entryTime}`);
+      
+      // ค้นหาข้อมูลผู้ใช้จาก lineUserId
+      const user = await User.findOne({ lineUserId: userId });
+      if (!user) {
+        throw new Error('ไม่พบข้อมูลผู้ใช้ในระบบ');
+      }
       
       // ตรวจสอบว่ามีการติดตามอยู่แล้วหรือไม่
       const existingSession = await TrackingSession.findOne({
@@ -24,9 +32,10 @@ class TrackingService {
         throw new Error('คุณมีการติดตามผลอยู่แล้ว กรุณารอจนกว่าจะเสร็จสิ้น');
       }
 
-      // สร้าง tracking session ใหม่
+      // สร้าง tracking session ใหม่ (แก้ไขให้ใส่ user ObjectId)
       const session = new TrackingSession({
-        lineUserId: userId,
+        user: user._id,        // ใช้ ObjectId แทน
+        lineUserId: userId,    // เก็บไว้เพื่อความสะดวก
         pair,
         prediction,
         entryTime,
@@ -51,31 +60,37 @@ class TrackingService {
     }
   }
 
-  // ตั้งเวลาเช็คผลครั้งถัดไป (แก้ไขแล้ว)
+  // แก้ไขฟังก์ชัน scheduleNextCheck ให้คำนวณเวลาถูกต้อง
   scheduleNextCheck(session) {
     const nextCheckTime = session.getNextCheckTime();
     const now = new Date();
     
+    console.log(`Current time: ${now.toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
+    console.log(`Entry time: ${session.entryTime}`);
+    console.log(`Next check time: ${nextCheckTime}`);
+    console.log(`Current round: ${session.currentRound}`);
+    
     // แปลงเวลาเช็คจาก string เป็น Date object
     const [hours, minutes] = nextCheckTime.split(':').map(Number);
     
-    const checkDate = new Date(session.entryDate);
+    // ใช้วันที่ปัจจุบันสำหรับการเช็ค
+    const checkDate = new Date();
     checkDate.setHours(hours, minutes, 0, 0);
     
-    // ถ้าเวลาที่จะเช็คผ่านไปแล้วในวันเดียวกัน ให้เช็คทันที
+    // ถ้าเวลาที่จะเช็คผ่านไปแล้วในวันนี้ ให้เช็คทันที
     let delay;
     if (checkDate <= now) {
-      // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันทีใน 5 วินาที
-      delay = 5000;
-      console.log(`⚠️ Check time ${nextCheckTime} has passed, checking in 5 seconds`);
+      // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันทีใน 10 วินาที
+      delay = 10000;
+      console.log(`⚠️ Check time ${nextCheckTime} has passed, checking in 10 seconds`);
     } else {
       delay = checkDate.getTime() - now.getTime();
     }
     
     // จำกัดเวลารอสูงสุด 1 ชั่วโมง (เผื่อมีปัญหาการคำนวณ)
     if (delay > 60 * 60 * 1000) {
-      delay = 5000; // เช็คทันทีใน 5 วินาทีแทน
-      console.log(`⚠️ Delay too long (${delay/1000}s), checking immediately`);
+      delay = 10000; // เช็คทันทีใน 10 วินาทีแทน
+      console.log(`⚠️ Delay too long (${delay/1000}s), checking in 10 seconds instead`);
     }
     
     console.log(`⏰ Next check scheduled for ${nextCheckTime} (in ${(delay/1000).toFixed(1)} seconds)`);
@@ -87,7 +102,7 @@ class TrackingService {
     this.activeChecks.set(session._id.toString(), timeoutId);
   }
 
-  // เช็คผลการเทรด
+  // เช็คผลการเทรด (คงเดิม แต่ปรับ log ให้ชัดเจนขึ้น)
   async checkResult(sessionId) {
     try {
       const session = await TrackingSession.findById(sessionId);
@@ -97,7 +112,7 @@ class TrackingService {
       }
 
       const checkTime = session.getNextCheckTime();
-      console.log(`🔍 Checking result for ${session.pair} at ${checkTime}`);
+      console.log(`🔍 Checking result for ${session.pair} at ${checkTime} (Round ${session.currentRound})`);
 
       // ดึงข้อมูลแท่งเทียนจาก IQ Option
       const candleData = await iqOptionService.getCandleData(
@@ -106,7 +121,10 @@ class TrackingService {
         session.entryDate.toISOString().split('T')[0]
       );
 
+      console.log(`📊 Candle data received:`, candleData);
+
       const isCorrect = session.isWinCondition(candleData.color);
+      console.log(`🎯 Prediction: ${session.prediction}, Candle: ${candleData.color}, Correct: ${isCorrect}`);
       
       // บันทึกผลลัพธ์
       session.results.push({
@@ -125,6 +143,7 @@ class TrackingService {
         session.wonAt = new Date();
         await session.save();
 
+        console.log(`🎉 User won! Session ${sessionId} completed`);
         await this.sendWinMessage(session);
       } else if (session.currentRound >= session.maxRounds) {
         // แพ้ครบ 7 ตาแล้ว
@@ -132,12 +151,14 @@ class TrackingService {
         session.lostAt = new Date();
         await session.save();
 
+        console.log(`😔 User lost after ${session.maxRounds} rounds. Session ${sessionId} completed`);
         await this.sendLoseMessage(session);
       } else {
         // ยังไม่ชนะ ต้องเช็คต่อ
         session.currentRound += 1;
         await session.save();
 
+        console.log(`⏳ Round ${session.currentRound - 1} failed, continuing to round ${session.currentRound}`);
         await this.sendContinueMessage(session, candleData);
         
         // ตั้งเวลาเช็คครั้งถัดไป
@@ -157,7 +178,14 @@ class TrackingService {
           type: 'text',
           text: `❌ เกิดข้อผิดพลาดในการเช็คผล\n💡 ${error.message}\n🔄 กรุณาลองใหม่อีกครั้ง`
         });
+        
+        // ยกเลิก session ที่เกิดข้อผิดพลาด
+        session.status = 'cancelled';
+        await session.save();
       }
+      
+      // ลบ timeout ออกจาก map
+      this.activeChecks.delete(sessionId.toString());
     }
   }
 
@@ -198,7 +226,7 @@ class TrackingService {
     const candleText = candleData.color === 'green' ? '🟢 เขียว (ขึ้น)' : candleData.color === 'red' ? '🔴 แดง (ลง)' : '⚪ doji';
     const isCorrect = session.isWinCondition(candleData.color);
     
-    const message = `📊 ผลตา ${session.currentRound}/${session.maxRounds}\n\n${session.pair} ${session.prediction}\n🕐 เวลา: ${session.getNextCheckTime()}\n📈 แท่งเทียน: ${candleText}\n💰 ราคา: ${candleData.open} → ${candleData.close}\n\n${isCorrect ? '✅ ถูกต้อง - ชนะแล้ว!' : '❌ ยังไม่ถูก - ' + prediction + ' ต่อ'}\n\n⏳ ${isCorrect ? 'เสร็จสิ้น' : `เช็คต่อในตาที่ ${session.currentRound + 1}`}`;
+    const message = `📊 ผลตา ${session.currentRound - 1}/${session.maxRounds}\n\n${session.pair} ${session.prediction}\n🕐 เวลา: ${session.results[session.results.length - 1].checkTime}\n📈 แท่งเทียน: ${candleText}\n💰 ราคา: ${candleData.open} → ${candleData.close}\n\n${isCorrect ? '✅ ถูกต้อง - ชนะแล้ว!' : '❌ ยังไม่ถูก - ' + prediction + ' ต่อ'}\n\n⏳ เช็คต่อในตาที่ ${session.currentRound} ในอีก 5 นาที`;
 
     await lineService.pushMessage(session.lineUserId, {
       type: 'text',
@@ -264,130 +292,6 @@ class TrackingService {
       cancelled: stats.find(s => s._id === 'cancelled')?.count || 0,
       tracking: stats.find(s => s._id === 'tracking')?.count || 0
     };
-  }
-
-  // ทำความสะอาด sessions ที่เก่า
-  async cleanupOldSessions(days = 7) {
-    try {
-      const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-      
-      const result = await TrackingSession.deleteMany({
-        createdAt: { $lt: cutoffDate },
-        status: { $in: ['won', 'lost', 'cancelled'] }
-      });
-
-      console.log(`Cleaned up ${result.deletedCount} old tracking sessions`);
-      return result.deletedCount;
-    } catch (error) {
-      console.error('Error cleaning up old sessions:', error);
-      throw error;
-    }
-  }
-
-  // หยุดการทำงานของ service
-  async stop() {
-    // ยกเลิก timeout ทั้งหมด
-    for (const [sessionId, timeoutId] of this.activeChecks) {
-      clearTimeout(timeoutId);
-      console.log(`Cancelled timeout for session ${sessionId}`);
-    }
-    this.activeChecks.clear();
-    console.log('TrackingService stopped');
-  }
-
-  // เริ่มต้นการทำงานของ service
-  async start() {
-    console.log('TrackingService starting...');
-    
-    // ตรวจหา sessions ที่ค้างอยู่และกู้คืน
-    const pendingSessions = await TrackingSession.find({ status: 'tracking' });
-    
-    for (const session of pendingSessions) {
-      const now = new Date();
-      const sessionAge = now.getTime() - session.createdAt.getTime();
-      
-      // ถ้า session เก่ากว่า 2 ชั่วโมง ให้ยกเลิก
-      if (sessionAge > 2 * 60 * 60 * 1000) {
-        console.log(`Cancelling old session ${session._id} (${sessionAge/1000/60} minutes old)`);
-        session.status = 'cancelled';
-        await session.save();
-      } else {
-        // กู้คืนการติดตาม
-        console.log(`Recovering tracking session ${session._id} for ${session.lineUserId}`);
-        this.scheduleNextCheck(session);
-      }
-    }
-    
-    console.log(`TrackingService started. Recovered ${this.activeChecks.size} active sessions.`);
-  }
-
-  // ดูสถานะ active checks ปัจจุบัน
-  getActiveChecks() {
-    return {
-      count: this.activeChecks.size,
-      sessions: Array.from(this.activeChecks.keys())
-    };
-  }
-
-  // บังคับเช็คผลทันที (สำหรับ testing)
-  async forceCheck(sessionId) {
-    try {
-      // ยกเลิก timeout เดิม
-      const timeoutId = this.activeChecks.get(sessionId.toString());
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this.activeChecks.delete(sessionId.toString());
-      }
-      
-      // เช็คทันที
-      await this.checkResult(sessionId);
-      
-      return { success: true, message: 'Force check completed' };
-    } catch (error) {
-      console.error('Error force checking:', error);
-      throw error;
-    }
-  }
-
-  // ดึงข้อมูล session ปัจจุบันของผู้ใช้
-  async getCurrentSession(userId) {
-    return await TrackingSession.findOne({
-      lineUserId: userId,
-      status: 'tracking'
-    });
-  }
-
-  // อัปเดตสถานะ session
-  async updateSessionStatus(sessionId, status, additionalData = {}) {
-    try {
-      const session = await TrackingSession.findById(sessionId);
-      if (!session) {
-        throw new Error('Session not found');
-      }
-
-      session.status = status;
-      
-      // เพิ่มข้อมูลเพิ่มเติม
-      if (status === 'won') {
-        session.wonAt = additionalData.wonAt || new Date();
-      } else if (status === 'lost') {
-        session.lostAt = additionalData.lostAt || new Date();
-      }
-
-      await session.save();
-      
-      // ยกเลิก active check ถ้ามี
-      const timeoutId = this.activeChecks.get(sessionId.toString());
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this.activeChecks.delete(sessionId.toString());
-      }
-
-      return session;
-    } catch (error) {
-      console.error('Error updating session status:', error);
-      throw error;
-    }
   }
 }
 
