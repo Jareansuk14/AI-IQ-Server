@@ -1,4 +1,5 @@
-//AI-Server/services/trackingService.js
+//AI-Server/services/trackingService.js - แก้ไขการคำนวณเวลา
+
 const TrackingSession = require('../models/trackingSession');
 const User = require('../models/user');
 const candleChecker = require('./candleChecker');
@@ -50,7 +51,7 @@ class TrackingService {
         text: `🔍 กำลังติดตามผล ${pair}\n\n📊 การทำนาย: ${prediction}\n⏰ เวลาเข้าเทรด: ${targetTime}\n🎯 รอบที่: 1/7\n\n💡 ระบบจะตรวจสอบผลทุก 5 นาที\n⌛ กรุณารอสักครู่...`
       });
 
-      // กำหนดเวลาเช็คครั้งแรก (5 นาทีหลังจากเวลาเข้าเทรด)
+      // กำหนดเวลาเช็คครั้งแรก (5 นาทีหลังจากตอนนี้)
       this.scheduleNextCheck(session);
 
       return session;
@@ -60,52 +61,27 @@ class TrackingService {
     }
   }
 
-  // กำหนดเวลาเช็คครั้งถัดไป
+  // กำหนดเวลาเช็คครั้งถัดไป - แก้ไขใหม่
   scheduleNextCheck(session) {
-    try {
-      const [hour, minute] = session.targetTime.split(':');
-      
-      // ใช้เวลาปัจจุบันที่ปรับ timezone แล้ว (ลบ 7 ชั่วโมง)
-      const now = new Date();
-      const adjustedNow = new Date(now.getTime() - (7 * 60 * 60 * 1000));
-      
-      // สร้างเวลาเช็คครั้งถัดไป
-      const nextCheckTime = new Date(adjustedNow);
-      const checkMinute = parseInt(minute) + (session.currentRound * 5);
-      
-      nextCheckTime.setHours(parseInt(hour));
-      nextCheckTime.setMinutes(checkMinute);
-      nextCheckTime.setSeconds(0);
-      nextCheckTime.setMilliseconds(0);
-      
-      console.log(`📅 Current time (adjusted): ${adjustedNow.toISOString()}`);
-      console.log(`📅 Next check time: ${nextCheckTime.toISOString()}`);
-      console.log(`📅 Session ${session._id} round ${session.currentRound}`);
-      
-      // คำนวณเวลาที่ต้องรอ
-      const waitTime = nextCheckTime.getTime() - adjustedNow.getTime();
-      
-      console.log(`⏳ Wait time: ${waitTime}ms (${Math.round(waitTime/1000)} seconds)`);
-      
-      if (waitTime > 0) {
-        console.log(`📅 กำหนดเช็ครอบที่ ${session.currentRound} ในอีก ${Math.round(waitTime/1000)} วินาที`);
-        
-        setTimeout(() => {
-          this.checkSessionResult(session._id);
-        }, waitTime);
-      } else {
-        // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันที
-        console.log(`⏰ เวลาผ่านไปแล้ว เช็คทันที (wait time: ${waitTime}ms)`);
-        setTimeout(() => {
-          this.checkSessionResult(session._id);
-        }, 5000); // รอ 5 วินาทีแล้วเช็ค
-      }
-    } catch (error) {
-      console.error('Error scheduling next check:', error);
-    }
+    // คำนวณเวลาเช็คครั้งถัดไป = ตอนนี้ + 5 นาที (300 วินาที)
+    const checkTime = Date.now() + (5 * 60 * 1000); // 5 นาที = 300 วินาที
+    const waitTime = 5 * 60 * 1000; // 300 วินาที
+
+    const checkDate = new Date(checkTime);
+    const checkTimeString = checkDate.toLocaleTimeString('th-TH', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'Asia/Bangkok'
+    });
+
+    console.log(`📅 กำหนดเช็ครอบที่ ${session.currentRound} ในอีก ${waitTime/1000} วินาที (${checkTimeString})`);
+    
+    setTimeout(() => {
+      this.checkSessionResult(session._id);
+    }, waitTime);
   }
 
-  // ตรวจสอบผลของ session
+  // ตรวจสอบผลของ session - แก้ไขการคำนวณเวลา
   async checkSessionResult(sessionId) {
     try {
       const session = await TrackingSession.findById(sessionId);
@@ -113,27 +89,34 @@ class TrackingService {
         console.log(`❌ Session ${sessionId} ไม่พบหรือไม่ได้อยู่ในสถานะ tracking`);
         return;
       }
-  
+
       console.log(`🔍 กำลังเช็คผล session ${sessionId} รอบที่ ${session.currentRound}`);
-  
-      // คำนวณเวลาที่ต้องเช็ค (ปรับ timezone)
+
+      // คำนวณเวลาที่ต้องเช็ค - ใช้เวลาเข้าเทรดบวกกับรอบปัจจุบัน
       const [hour, minute] = session.targetTime.split(':');
-      const checkMinute = parseInt(minute) + ((session.currentRound - 1) * 5);
       
-      // ปรับชั่วโมงถ้าจำนวนนาทีเกิน 60
-      let checkHour = parseInt(hour);
-      let adjustedCheckMinute = checkMinute;
+      // คำนวณนาทีที่ต้องเช็ค
+      const entryMinute = parseInt(minute);
+      const checkMinute = entryMinute + (session.currentRound * 5);
       
-      if (checkMinute >= 60) {
-        checkHour += Math.floor(checkMinute / 60);
-        adjustedCheckMinute = checkMinute % 60;
+      // จัดการกรณีนาทีเกิน 60
+      let finalHour = parseInt(hour);
+      let finalMinute = checkMinute;
+      
+      if (finalMinute >= 60) {
+        finalHour += Math.floor(finalMinute / 60);
+        finalMinute = finalMinute % 60;
       }
       
-      const checkTime = `${checkHour.toString().padStart(2, '0')}:${adjustedCheckMinute.toString().padStart(2, '0')}`;
+      // จัดการกรณีชั่วโมงเกิน 24
+      if (finalHour >= 24) {
+        finalHour = finalHour % 24;
+      }
+
+      const checkTime = `${String(finalHour).padStart(2, '0')}:${String(finalMinute).padStart(2, '0')}`;
       
-      console.log(`🕐 Checking candle at time: ${checkTime}`);
-      console.log(`🎯 Original target: ${session.targetTime}, Current round: ${session.currentRound}`);
-  
+      console.log(`📊 เช็คผลการเทรดที่เวลา: ${checkTime} (รอบที่ ${session.currentRound})`);
+
       // ดึงข้อมูลแท่งเทียน
       const candleData = await candleChecker.checkCandle(session.pair, checkTime);
       
@@ -148,16 +131,7 @@ class TrackingService {
         closePrice: candleData.close,
         isCorrect
       });
-  
-      console.log(`📊 Round ${session.currentRound} result:`, {
-        pair: session.pair,
-        prediction: session.prediction,
-        candleColor: candleData.color,
-        isCorrect,
-        open: candleData.open,
-        close: candleData.close
-      });
-  
+
       if (isCorrect) {
         // ชนะแล้ว!
         session.status = 'won';
@@ -168,8 +142,6 @@ class TrackingService {
         await this.sendWinMessage(session);
         this.activeTracking.delete(session.lineUserId);
         
-        console.log(`🎉 Session ${sessionId} WON in round ${session.currentRound}!`);
-        
       } else if (session.isMaxRoundsReached()) {
         // แพ้ครบ 7 รอบแล้ว
         session.status = 'lost';
@@ -179,19 +151,17 @@ class TrackingService {
         await this.sendLoseMessage(session);
         this.activeTracking.delete(session.lineUserId);
         
-        console.log(`😔 Session ${sessionId} LOST after ${session.maxRounds} rounds`);
-        
       } else {
         // ยังไม่ชนะ ทำรอบต่อไป
         session.currentRound += 1;
         await session.save();
         
         await this.sendContinueMessage(session, candleData);
-        this.scheduleNextCheck(session);
         
-        console.log(`🔄 Session ${sessionId} continues to round ${session.currentRound}`);
+        // กำหนดเวลาเช็ครอบต่อไป (อีก 5 นาที)
+        this.scheduleNextCheck(session);
       }
-  
+
     } catch (error) {
       console.error(`❌ Error checking session ${sessionId}:`, error);
       

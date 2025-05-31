@@ -1937,15 +1937,8 @@ function createForexPairsMessage() {
 // ฟังก์ชันคำนวณเวลา 5 นาทีข้างหน้า (ปัดขึ้นไปที่ 5 นาทีถัดไป)
 function calculateNextTimeSlot() {
   const now = new Date();
-  
-  // ลบ 7 ชั่วโมงออกจากเวลาปัจจุบันก่อน
-  const adjustedTime = new Date(now.getTime() - (7 * 60 * 60 * 1000));
-  
-  const currentMinutes = adjustedTime.getMinutes();
-  const currentHours = adjustedTime.getHours();
-  
-  console.log(`🕐 Current time (adjusted): ${adjustedTime.toISOString()}`);
-  console.log(`🕐 Current local time: ${currentHours}:${currentMinutes.toString().padStart(2, '0')}`);
+  const currentMinutes = now.getMinutes();
+  const currentHours = now.getHours();
   
   // หาจำนวนนาทีที่ต้องเพิ่มเพื่อไปถึง 5 นาทีถัดไป
   let targetMinutes;
@@ -1976,7 +1969,7 @@ function calculateNextTimeSlot() {
     targetMinutes = 0;
   }
   
-  const targetTime = new Date(adjustedTime);
+  const targetTime = new Date();
   
   if (targetMinutes === 0 && currentMinutes >= 55) {
     // ไปชั่วโมงถัดไป
@@ -1989,20 +1982,14 @@ function calculateNextTimeSlot() {
   targetTime.setSeconds(0);
   targetTime.setMilliseconds(0);
   
-  // ส่งกลับในรูปแบบ HH:MM (ใช้เวลาที่ปรับแล้ว)
-  const resultTime = targetTime.toLocaleTimeString('th-TH', { 
+  // ส่งกลับในรูปแบบ HH:MM
+  return targetTime.toLocaleTimeString('th-TH', { 
     hour: '2-digit', 
     minute: '2-digit',
     hour12: false,
     timeZone: 'Asia/Bangkok'
   });
-  
-  console.log(`🎯 Target time calculated: ${resultTime}`);
-  console.log(`🎯 Target time full: ${targetTime.toISOString()}`);
-  
-  return resultTime;
 }
-
 
 function createContinueTradeMessage() {
   return {
