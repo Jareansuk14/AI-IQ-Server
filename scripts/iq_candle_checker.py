@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # AI-Server/scripts/iq_candle_checker.py
 import sys
 import io
@@ -110,37 +111,25 @@ def main():
 def calculate_target_time(entry_time_str, round_num):
     """คำนวณเวลาที่ต้องเช็คแท่งเทียน"""
     try:
-        print(f"🔢 Calculating target time for {entry_time_str}, round {round_num}", file=sys.stderr)
-        
         # แปลง entry_time_str เป็น datetime
-        # เช่น "17:45" -> datetime object
+        # เช่น "13:45" -> datetime object
         hours, minutes = map(int, entry_time_str.split(':'))
         
         now = datetime.now()
-        print(f"🕐 Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
-        
-        # สร้างเวลาเข้าเทรดสำหรับวันนี้
         entry_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-        print(f"🎯 Entry time: {entry_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
         
-        # ถ้าเวลาเข้าเทรดเลยไปแล้วในวันนี้ ให้ใช้วันถัดไป (เฉพาะรอบ 1)
-        if round_num == 1 and entry_time < now:
+        # ถ้าเวลาเข้าเทรดเลยไปแล้ว ให้ใช้วันถัดไป
+        if entry_time < now:
             entry_time = entry_time + timedelta(days=1)
-            print(f"⏭️ Entry time moved to next day: {entry_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
         
         # คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
         # รอบ 1 = entry_time + 5 นาที
         # รอบ 2 = entry_time + 10 นาที
         # รอบ 3 = entry_time + 15 นาที
-        # ... และอื่นๆ
         target_time = entry_time + timedelta(minutes=5 * round_num)
-        print(f"⏰ Target candle time for round {round_num}: {target_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
         
         # แปลงเป็น timestamp
-        timestamp = int(time.mktime(target_time.timetuple()))
-        print(f"📅 Target timestamp: {timestamp}", file=sys.stderr)
-        
-        return timestamp
+        return int(time.mktime(target_time.timetuple()))
         
     except Exception as e:
         print(f"❌ Error calculating target time: {e}", file=sys.stderr)
