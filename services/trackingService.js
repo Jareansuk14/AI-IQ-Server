@@ -1,4 +1,4 @@
-//AI-Server/services/trackingService.js
+//AI-Server/services/trackingService.js - อัปเดตเพิ่มการจัดการวันที่
 const TrackingSession = require('../models/trackingSession');
 const User = require('../models/user');
 const candleChecker = require('./candleChecker');
@@ -29,14 +29,31 @@ class TrackingService {
         throw new Error('ไม่พบผู้ใช้');
       }
 
+      // สร้างวันที่และเวลาปัจจุบัน (เวลาไทย)
+      const now = new Date();
+      const thaiTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      const entryDate = thaiTime.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      console.log(`📅 Creating tracking session:`);
+      console.log(`   Entry Date: ${entryDate}`);
+      console.log(`   Target Time: ${targetTime}`);
+      console.log(`   Prediction: ${prediction}`);
+      console.log(`   Pair: ${pair}`);
+
       // สร้าง tracking session ใหม่
       const session = new TrackingSession({
         user: user._id,
         lineUserId,
         pair,
         prediction,
-        entryTime: new Date(),
-        targetTime
+        entryTime: thaiTime,
+        entryDate,
+        targetTime,
+        timezone: 'Asia/Bangkok',
+        debugInfo: {
+          originalTargetTimestamp: thaiTime.getTime(),
+          scheduleInfo: []
+        }
       });
 
       await session.save();
@@ -47,7 +64,7 @@ class TrackingService {
       // ส่งข้อความแจ้งว่ากำลังติดตาม
       await lineService.pushMessage(lineUserId, {
         type: 'text',
-        text: `🔍 กำลังติดตามผล ${pair}\n\n📊 การทำนาย: ${prediction}\n⏰ เวลาเข้าเทรด: ${targetTime}\n🎯 รอบที่: 1/7\n\n💡 ระบบจะตรวจสอบผลทุก 5 นาที\n⌛ กรุณารอสักครู่...`
+        text: `🔍 กำลังติดตามผล ${pair}\n\n📊 การทำนาย: ${prediction}\n📅 วันที่เข้าเทรด: ${entryDate}\n⏰ เวลาเข้าเทรด: ${targetTime}\n🎯 รอบที่: 1/7\n\n💡 ระบบจะตรวจสอบผลทุก 5 นาที\n⌛ กรุณารอสักครู่...`
       });
 
       // กำหนดเวลาเช็คครั้งแรก (5 นาทีหลังจากเวลาเข้าเทรด)
@@ -62,23 +79,44 @@ class TrackingService {
 
   // กำหนดเวลาเช็คครั้งถัดไป
   scheduleNextCheck(session) {
-    const [hour, minute] = session.targetTime.split(':');
-    const nextCheckTime = new Date();
-    nextCheckTime.setHours(parseInt(hour), parseInt(minute) + (session.currentRound * 5), 0, 0);
-
-    // คำนวณเวลาที่ต้องรอ
-    const waitTime = nextCheckTime.getTime() - Date.now();
-
-    if (waitTime > 0) {
-      console.log(`📅 กำหนดเช็ครอบที่ ${session.currentRound} ในอีก ${Math.round(waitTime/1000)} วินาที`);
+    try {
+      const checkInfo = session.getCheckDateAndTime();
+      const nextCheckTime = checkInfo.fullDateTime;
       
-      setTimeout(() => {
-        this.checkSessionResult(session._id);
-      }, waitTime);
-    } else {
-      // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันที
-      console.log(`⏰ เวลาผ่านไปแล้ว เช็คทันที`);
-      this.checkSessionResult(session._id);
+      console.log(`📅 Schedule Info for Round ${session.currentRound}:`);
+      console.log(`   Check Date: ${checkInfo.date}`);
+      console.log(`   Check Time: ${checkInfo.time}`);
+      console.log(`   Is Next Day: ${checkInfo.isNextDay}`);
+      console.log(`   Full DateTime: ${nextCheckTime.toISOString()}`);
+
+      // คำนวณเวลาที่ต้องรอ
+      const waitTime = nextCheckTime.getTime() - Date.now();
+      
+      // บันทึกข้อมูล debug
+      if (!session.debugInfo) session.debugInfo = { scheduleInfo: [] };
+      session.debugInfo.scheduleInfo.push({
+        round: session.currentRound,
+        scheduledFor: nextCheckTime,
+        actualCheckTime: null,
+        timeDifference: waitTime
+      });
+      session.save(); // บันทึกข้อมูล debug
+
+      if (waitTime > 0) {
+        console.log(`⏰ กำหนดเช็ครอบที่ ${session.currentRound} ในอีก ${Math.round(waitTime/1000)} วินาที (${Math.round(waitTime/60000)} นาที)`);
+        
+        setTimeout(() => {
+          this.checkSessionResult(session._id);
+        }, waitTime);
+      } else {
+        // ถ้าเวลาผ่านไปแล้ว ให้เช็คทันที (แต่อาจจะหาข้อมูลไม่เจอ)
+        console.log(`⚠️ เวลาผ่านไปแล้ว ${Math.abs(Math.round(waitTime/1000))} วินาที - เช็คทันที`);
+        setTimeout(() => {
+          this.checkSessionResult(session._id);
+        }, 1000); // รอ 1 วินาทีเพื่อให้แน่ใจว่าข้อมูลพร้อม
+      }
+    } catch (error) {
+      console.error('Error scheduling next check:', error);
     }
   }
 
@@ -93,13 +131,27 @@ class TrackingService {
 
       console.log(`🔍 กำลังเช็คผล session ${sessionId} รอบที่ ${session.currentRound}`);
 
-      // คำนวณเวลาที่ต้องเช็ค
-      const [hour, minute] = session.targetTime.split(':');
-      const checkMinute = parseInt(minute) + ((session.currentRound - 1) * 5);
-      const checkTime = `${hour.padStart(2, '0')}:${String(checkMinute).padStart(2, '0')}`;
+      // คำนวณวันที่และเวลาที่ต้องเช็ค
+      const checkInfo = session.getCheckDateAndTime();
+      
+      console.log(`📊 Check Details:`);
+      console.log(`   Target Date: ${checkInfo.date}`);
+      console.log(`   Target Time: ${checkInfo.time}`);
+      console.log(`   Is Cross Day: ${checkInfo.isNextDay}`);
+
+      // อัปเดตข้อมูล debug
+      const debugIndex = session.debugInfo.scheduleInfo.length - 1;
+      if (debugIndex >= 0) {
+        session.debugInfo.scheduleInfo[debugIndex].actualCheckTime = new Date();
+      }
 
       // ดึงข้อมูลแท่งเทียน
-      const candleData = await candleChecker.checkCandle(session.pair, checkTime);
+      const candleData = await candleChecker.checkCandle(session.pair, checkInfo.date, checkInfo.time);
+      
+      // ตรวจสอบความถูกต้องของข้อมูลที่ได้รับ
+      if (!candleData || !candleData.color) {
+        throw new Error(`ไม่พบข้อมูลแท่งเทียนสำหรับ ${session.pair} วันที่ ${checkInfo.date} เวลา ${checkInfo.time}`);
+      }
       
       // บันทึกผลลัพธ์
       const isCorrect = session.isCorrectPrediction(candleData.color);
@@ -107,10 +159,14 @@ class TrackingService {
       session.results.push({
         round: session.currentRound,
         checkTime: new Date(),
+        checkDate: checkInfo.date,
+        expectedTime: checkInfo.time,
+        actualTime: candleData.time || checkInfo.time,
         candleColor: candleData.color,
         openPrice: candleData.open,
         closePrice: candleData.close,
-        isCorrect
+        isCorrect,
+        candleTimestamp: candleData.timestamp
       });
 
       if (isCorrect) {
@@ -120,8 +176,10 @@ class TrackingService {
         session.completedAt = new Date();
         
         await session.save();
-        await this.sendWinMessage(session);
+        await this.sendWinMessage(session, candleData);
         this.activeTracking.delete(session.lineUserId);
+        
+        console.log(`🎉 Session ${sessionId} WON in round ${session.currentRound}!`);
         
       } else if (session.isMaxRoundsReached()) {
         // แพ้ครบ 7 รอบแล้ว
@@ -129,16 +187,20 @@ class TrackingService {
         session.completedAt = new Date();
         
         await session.save();
-        await this.sendLoseMessage(session);
+        await this.sendLoseMessage(session, candleData);
         this.activeTracking.delete(session.lineUserId);
+        
+        console.log(`😔 Session ${sessionId} LOST after ${session.maxRounds} rounds`);
         
       } else {
         // ยังไม่ชนะ ทำรอบต่อไป
         session.currentRound += 1;
         await session.save();
         
-        await this.sendContinueMessage(session, candleData);
+        await this.sendContinueMessage(session, candleData, checkInfo);
         this.scheduleNextCheck(session);
+        
+        console.log(`⏳ Session ${sessionId} continues to round ${session.currentRound}`);
       }
 
     } catch (error) {
@@ -150,8 +212,15 @@ class TrackingService {
         if (session) {
           await lineService.pushMessage(session.lineUserId, {
             type: 'text',
-            text: '❌ เกิดข้อผิดพลาดในการตรวจสอบผล\n\n💡 กรุณาลองใหม่อีกครั้ง'
+            text: `❌ เกิดข้อผิดพลาดในการตรวจสอบผลรอบที่ ${session.currentRound}\n\n🔍 รายละเอียด: ${error.message}\n\n💡 กรุณาลองใหม่อีกครั้ง`
           });
+          
+          // ยกเลิก session ที่มีปัญหา
+          session.status = 'cancelled';
+          session.completedAt = new Date();
+          await session.save();
+          
+          this.activeTracking.delete(session.lineUserId);
         }
       } catch (notifyError) {
         console.error('Error sending error notification:', notifyError);
@@ -160,8 +229,11 @@ class TrackingService {
   }
 
   // ส่งข้อความเมื่อชนะ
-  async sendWinMessage(session) {
-    const winText = `🎉 ยินดีด้วย! ทำนายถูกต้อง!\n\n📊 ${session.pair} ${session.prediction}\n🏆 ชนะในรอบที่: ${session.winRound}/7\n⏰ เวลาที่ชนะ: ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}\n\n✨ การทำนายของคุณแม่นยำ!`;
+  async sendWinMessage(session, candleData) {
+    const checkInfo = session.getCheckDateAndTime();
+    const actualColor = candleData.color === 'green' ? 'เขียว (ขึ้น)' : candleData.color === 'red' ? 'แดง (ลง)' : 'โดจิ';
+    
+    const winText = `🎉 ยินดีด้วย! ทำนายถูกต้อง!\n\n📊 ${session.pair} ${session.prediction}\n🏆 ชนะในรอบที่: ${session.winRound}/7\n📅 วันที่เช็ค: ${checkInfo.date}\n⏰ เวลาที่ชนะ: ${checkInfo.time}\n🕯️ แท่งเทียน: ${actualColor}\n📈 Open: ${candleData.open}\n📉 Close: ${candleData.close}\n\n✨ การทำนายของคุณแม่นยำ!`;
 
     await lineService.pushMessage(session.lineUserId, [
       {
@@ -173,8 +245,11 @@ class TrackingService {
   }
 
   // ส่งข้อความเมื่อแพ้
-  async sendLoseMessage(session) {
-    const loseText = `😔 การติดตามผลสิ้นสุดแล้ว\n\n📊 ${session.pair} ${session.prediction}\n📉 ไม่พบผลลัพธ์ที่ถูกต้องใน 7 รอบ\n⏰ เวลาสิ้นสุด: ${new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}\n\n💪 ไม่เป็นไร ลองใหม่ในครั้งต่อไป!`;
+  async sendLoseMessage(session, candleData) {
+    const checkInfo = session.getCheckDateAndTime();
+    const actualColor = candleData.color === 'green' ? 'เขียว (ขึ้น)' : candleData.color === 'red' ? 'แดง (ลง)' : 'โดจิ';
+    
+    const loseText = `😔 การติดตามผลสิ้นสุดแล้ว\n\n📊 ${session.pair} ${session.prediction}\n📉 ไม่พบผลลัพธ์ที่ถูกต้องใน ${session.maxRounds} รอบ\n📅 วันที่สิ้นสุด: ${checkInfo.date}\n⏰ เวลาสิ้นสุด: ${checkInfo.time}\n🕯️ แท่งสุดท้าย: ${actualColor}\n\n💪 ไม่เป็นไร ลองใหม่ในครั้งต่อไป!`;
 
     await lineService.pushMessage(session.lineUserId, [
       {
@@ -186,11 +261,11 @@ class TrackingService {
   }
 
   // ส่งข้อความเมื่อยังไม่ชนะ
-  async sendContinueMessage(session, candleData) {
+  async sendContinueMessage(session, candleData, checkInfo) {
     const expectation = session.prediction === 'CALL' ? 'แท่งเขียว (ขึ้น)' : 'แท่งแดง (ลง)';
     const actualColor = candleData.color === 'green' ? 'เขียว (ขึ้น)' : candleData.color === 'red' ? 'แดง (ลง)' : 'โดจิ';
     
-    const continueText = `📊 ผลรอบที่ ${session.currentRound - 1}\n\n💹 ${session.pair}: แท่งปิดสี${actualColor}\n🎯 ต้องการ: ${expectation}\n📈 Open: ${candleData.open}\n📉 Close: ${candleData.close}\n\n⏳ ยังไม่ถูก ติดตามต่อรอบที่ ${session.currentRound}/7\n⏰ จะเช็คอีกครั้งใน 5 นาที`;
+    const continueText = `📊 ผลรอบที่ ${session.currentRound - 1}\n\n💹 ${session.pair}: แท่งปิดสี${actualColor}\n🎯 ต้องการ: ${expectation}\n📅 วันที่เช็ค: ${checkInfo.date}\n⏰ เวลาเช็ค: ${checkInfo.time}\n📈 Open: ${candleData.open}\n📉 Close: ${candleData.close}\n\n⏳ ยังไม่ถูก ติดตามต่อรอบที่ ${session.currentRound}/${session.maxRounds}\n⏰ จะเช็คอีกครั้งใน 5 นาที`;
 
     await lineService.pushMessage(session.lineUserId, {
       type: 'text',
@@ -254,6 +329,36 @@ class TrackingService {
       return stats;
     } catch (error) {
       console.error('Error getting tracking stats:', error);
+      throw error;
+    }
+  }
+
+  // ดูรายละเอียดการติดตามที่กำลังดำเนินการ
+  async getActiveTrackingInfo(lineUserId) {
+    try {
+      const session = await TrackingSession.findOne({
+        lineUserId,
+        status: 'tracking'
+      });
+
+      if (!session) return null;
+
+      const checkInfo = session.getCheckDateAndTime();
+      
+      return {
+        pair: session.pair,
+        prediction: session.prediction,
+        currentRound: session.currentRound,
+        maxRounds: session.maxRounds,
+        entryDate: session.entryDate,
+        entryTime: session.targetTime,
+        nextCheckDate: checkInfo.date,
+        nextCheckTime: checkInfo.time,
+        isNextDay: checkInfo.isNextDay,
+        results: session.results
+      };
+    } catch (error) {
+      console.error('Error getting active tracking info:', error);
       throw error;
     }
   }
