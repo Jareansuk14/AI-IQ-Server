@@ -1,4 +1,4 @@
-//AI-Server/services/trackingService.js - อัปเดตเพิ่มการจัดการวันที่
+//AI-Server/services/trackingService.js - อัปเดตแก้ไขการจัดการวันที่และเวลา
 const TrackingSession = require('../models/trackingSession');
 const User = require('../models/user');
 const candleChecker = require('./candleChecker');
@@ -39,6 +39,7 @@ class TrackingService {
       console.log(`   Target Time: ${targetTime}`);
       console.log(`   Prediction: ${prediction}`);
       console.log(`   Pair: ${pair}`);
+      console.log(`   Current Thai Time: ${thaiTime.toLocaleString('th-TH', {timeZone: 'Asia/Bangkok'})}`);
 
       // สร้าง tracking session ใหม่
       const session = new TrackingSession({
@@ -77,7 +78,7 @@ class TrackingService {
     }
   }
 
-  // กำหนดเวลาเช็คครั้งถัดไป
+  // กำหนดเวลาเช็คครั้งถัดไป - 🔧 แก้ไขการคำนวณเวลา
   scheduleNextCheck(session) {
     try {
       const checkInfo = session.getCheckDateAndTime();
@@ -92,6 +93,44 @@ class TrackingService {
       // คำนวณเวลาที่ต้องรอ
       const waitTime = nextCheckTime.getTime() - Date.now();
       
+      // 🔧 เพิ่มการ debug เพื่อหาสาเหตุ
+      console.log(`⏰ Debug Time Calculation:`);
+      console.log(`   Next Check Time (timestamp): ${nextCheckTime.getTime()}`);
+      console.log(`   Current Time (timestamp): ${Date.now()}`);
+      console.log(`   Next Check Time (readable): ${nextCheckTime.toLocaleString('th-TH', {timeZone: 'Asia/Bangkok'})}`);
+      console.log(`   Current Time (readable): ${new Date().toLocaleString('th-TH', {timeZone: 'Asia/Bangkok'})}`);
+      console.log(`   Wait Time (ms): ${waitTime}`);
+      console.log(`   Wait Time (minutes): ${Math.round(waitTime/60000)}`);
+
+      // 🛡️ ป้องกันการรอนานเกินไป (ไม่ควรเกิน 30 นาที)
+      if (waitTime > 30 * 60 * 1000) { // 30 นาที
+        console.error(`❌ Wait time too long: ${Math.round(waitTime/60000)} minutes`);
+        console.error(`❌ This indicates a timezone or calculation error`);
+        
+        // ใช้เวลาจริงแทน (5 นาทีจากตอนนี้)
+        const correctedWaitTime = 5 * 60 * 1000; // 5 นาที
+        
+        console.log(`🔧 Using corrected wait time: ${Math.round(correctedWaitTime/60000)} minutes`);
+        
+        setTimeout(() => {
+          this.checkSessionResult(session._id);
+        }, correctedWaitTime);
+        
+        return;
+      }
+
+      // 🛡️ ป้องกันเวลาติดลบมากเกินไป (เกิน 10 นาที)
+      if (waitTime < -10 * 60 * 1000) {
+        console.error(`❌ Wait time too negative: ${Math.round(waitTime/60000)} minutes`);
+        
+        // เช็คทันทีถ้าเวลาผ่านไปแล้วมาก
+        setTimeout(() => {
+          this.checkSessionResult(session._id);
+        }, 1000);
+        
+        return;
+      }
+
       // บันทึกข้อมูล debug
       if (!session.debugInfo) session.debugInfo = { scheduleInfo: [] };
       session.debugInfo.scheduleInfo.push({
@@ -117,6 +156,12 @@ class TrackingService {
       }
     } catch (error) {
       console.error('Error scheduling next check:', error);
+      
+      // Fallback: เช็คใน 5 นาที
+      console.log('🔧 Using fallback: checking in 5 minutes');
+      setTimeout(() => {
+        this.checkSessionResult(session._id);
+      }, 5 * 60 * 1000);
     }
   }
 
@@ -360,6 +405,90 @@ class TrackingService {
     } catch (error) {
       console.error('Error getting active tracking info:', error);
       throw error;
+    }
+  }
+
+  // 🔧 เพิ่มฟังก์ชันเช็คและทำความสะอาด sessions ที่ค้าง
+  async cleanupStuckSessions() {
+    try {
+      const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 ชั่วโมงที่แล้ว
+      
+      const stuckSessions = await TrackingSession.find({
+        status: 'tracking',
+        createdAt: { $lt: cutoffTime }
+      });
+
+      if (stuckSessions.length > 0) {
+        console.log(`🧹 Found ${stuckSessions.length} stuck sessions, cleaning up...`);
+        
+        await TrackingSession.updateMany(
+          {
+            status: 'tracking',
+            createdAt: { $lt: cutoffTime }
+          },
+          {
+            $set: {
+              status: 'cancelled',
+              completedAt: new Date()
+            }
+          }
+        );
+
+        // ลบจาก activeTracking
+        for (const session of stuckSessions) {
+          this.activeTracking.delete(session.lineUserId);
+        }
+
+        console.log(`✅ Cleaned up ${stuckSessions.length} stuck sessions`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up stuck sessions:', error);
+    }
+  }
+
+  // 🔧 เพิ่มฟังก์ชันตรวจสอบสุขภาพของ tracking service
+  async healthCheck() {
+    try {
+      const activeCount = await TrackingSession.countDocuments({ status: 'tracking' });
+      const memoryActiveCount = this.activeTracking.size;
+      
+      console.log(`📊 Tracking Service Health Check:`);
+      console.log(`   Active sessions in DB: ${activeCount}`);
+      console.log(`   Active sessions in memory: ${memoryActiveCount}`);
+      
+      // ถ้าจำนวนไม่ตรงกัน ให้ sync
+      if (activeCount !== memoryActiveCount) {
+        console.log(`⚠️ Mismatch detected, syncing...`);
+        await this.syncActiveTracking();
+      }
+
+      return {
+        dbActiveCount: activeCount,
+        memoryActiveCount: memoryActiveCount,
+        isHealthy: activeCount === memoryActiveCount
+      };
+    } catch (error) {
+      console.error('Error in health check:', error);
+      return { error: error.message };
+    }
+  }
+
+  // 🔧 Sync active tracking map กับ database
+  async syncActiveTracking() {
+    try {
+      const activeSessions = await TrackingSession.find({ status: 'tracking' });
+      
+      // ล้าง memory
+      this.activeTracking.clear();
+      
+      // เพิ่มกลับเข้าไป
+      for (const session of activeSessions) {
+        this.activeTracking.set(session.lineUserId, session._id);
+      }
+      
+      console.log(`🔄 Synced ${activeSessions.length} active sessions`);
+    } catch (error) {
+      console.error('Error syncing active tracking:', error);
     }
   }
 }
