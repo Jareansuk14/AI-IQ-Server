@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - Share Action Version
+// AI-Server/controllers/lineController.js - อัปเดตใช้ Compact Flex
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -12,8 +12,9 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  createInviteCardMessage,        // การ์ดเชิญ
-  createShareActionMessage        // ปุ่มแชร์ (Share Action)
+  createCompactShareTargetMessage,   // 🔄 เปลี่ยนเป็น Compact
+  createCompactInviteCard,           // 🔄 เปลี่ยนเป็น Compact
+  createSharePreviewMessage          // 🆕 เพิ่มใหม่
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -154,7 +155,7 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
-    // 🔥 อัปเดตส่วนแชร์ใหม่ - Share Action
+    // 🔄 อัปเดตส่วนแชร์ใหม่ - ใช้ Compact Flex
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
       try {
         // ดึงข้อมูลผู้ใช้
@@ -162,17 +163,19 @@ const handleSpecialCommand = async (event) => {
         const referralCode = await creditService.getReferralCode(userId);
         const userName = profile?.displayName || 'เพื่อน';
         
-        // สร้างการ์ดเชิญ
-        const inviteCard = createInviteCardMessage(referralCode, userName);
+        console.log(`🔄 Creating compact share message for ${userName} with code ${referralCode}`);
         
-        // สร้างปุ่มแชร์
-        const shareActionMessage = createShareActionMessage(referralCode, userName);
+        // 🆕 สร้างข้อความทั้ง 3 แบบ
+        const previewMessage = createSharePreviewMessage(referralCode, userName);
+        const shareMessage = createCompactShareTargetMessage(referralCode, userName);
         
-        // ส่งทั้งสองข้อความ
-        return lineService.replyMessage(event.replyToken, [inviteCard, shareActionMessage]);
-        
+        // ส่งข้อความทั้งสอง
+        return lineService.replyMessage(event.replyToken, [
+          previewMessage,  // แสดงตัวอย่างก่อน
+          shareMessage     // ตามด้วยปุ่มแชร์
+        ]);
       } catch (error) {
-        console.error('Error creating share message:', error);
+        console.error('Error creating compact share message:', error);
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
           text: '❌ เกิดข้อผิดพลาดในการสร้างข้อความแชร์ กรุณาลองใหม่อีกครั้ง'
@@ -180,7 +183,33 @@ const handleSpecialCommand = async (event) => {
       }
     }
     
-    // 🆕 เพิ่มคำสั่งดูรหัสแนะนำเฉยๆ (ไม่แชร์)
+    // 🆕 เพิ่มคำสั่งดูตัวอย่างการ์ด
+    if (text === 'ตัวอย่าง' || text === 'preview' || text === 'demo') {
+      try {
+        const profile = await lineService.getUserProfile(userId);
+        const referralCode = await creditService.getReferralCode(userId);
+        const userName = profile?.displayName || 'เพื่อน';
+        
+        // สร้างการ์ดตัวอย่าง
+        const demoCard = createCompactInviteCard(referralCode, userName);
+        
+        return lineService.replyMessage(event.replyToken, [
+          {
+            type: 'text',
+            text: '👀 นี่คือการ์ดเชิญที่เพื่อนจะได้รับ:'
+          },
+          demoCard
+        ]);
+      } catch (error) {
+        console.error('Error creating demo card:', error);
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '❌ เกิดข้อผิดพลาดในการสร้างตัวอย่าง'
+        });
+      }
+    }
+    
+    // 🆕 เพิ่มคำสั่งดูรหัสแนะนำพร้อมสถิติ
     if (text === 'รหัส' || text === 'code' || text === 'mycode') {
       try {
         const referralCode = await creditService.getReferralCode(userId);
@@ -188,7 +217,7 @@ const handleSpecialCommand = async (event) => {
         
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `🎯 รหัสแนะนำของคุณ: ${referralCode}\n\n📊 สถิติการแนะนำ:\n• จำนวนคนที่แนะนำ: ${stats.referredCount} คน\n• เครดิตที่ได้รับ: ${stats.totalCreditsEarned} เครดิต\n\n📝 เพื่อนสามารถพิมพ์:\n"รหัส:${referralCode}" เพื่อรับ 5 เครดิตฟรี\n\n🎁 คุณจะได้รับ 10 เครดิตทุกครั้งที่มีคนใช้รหัสของคุณ\n\n📤 กด "แชร์" เพื่อส่งการ์ดเชิญให้เพื่อน`
+          text: `🎯 รหัสแนะนำของคุณ: ${referralCode}\n\n📊 สถิติการแนะนำ:\n• จำนวนคนที่แนะนำ: ${stats.referredCount} คน\n• เครดิตที่ได้รับ: ${stats.totalCreditsEarned} เครดิต\n\n📝 เพื่อนสามารถพิมพ์:\n"รหัส:${referralCode}" เพื่อรับ 5 เครดิตฟรี\n\n🎁 คุณจะได้รับ 10 เครดิตทุกครั้งที่มีคนใช้รหัสของคุณ\n\n📤 กด "แชร์" เพื่อส่งการ์ดเชิญให้เพื่อน\n👀 กด "ตัวอย่าง" เพื่อดูการ์ดที่เพื่อนจะได้รับ`
         });
       } catch (error) {
         console.error('Error getting referral info:', error);
@@ -235,7 +264,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// 🔥 ฟังก์ชันจัดการ Postback Events
+// 🔥 ฟังก์ชันจัดการ Postback Events (เหมือนเดิม)
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -293,7 +322,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis
+      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis (เหมือนเดิม)
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -423,7 +452,7 @@ const handlePostbackEvent = async (event) => {
   }
 };
 
-// 🆕 ฟังก์ชันจัดการเมื่อมีคนเพิ่มเพื่อนผ่านลิงก์แชร์
+// 🆕 ฟังก์ชันจัดการเมื่อมีคนเพิ่มเพื่อนผ่านลิงก์แชร์ (เหมือนเดิม)
 const handleFollowWithReferral = async (userId, referralCode) => {
   try {
     console.log(`New user ${userId} followed via referral code: ${referralCode}`);
@@ -466,7 +495,7 @@ const handleFollowWithReferral = async (userId, referralCode) => {
   }
 };
 
-// ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน)
+// ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน) (เหมือนเดิม)
 const handleFollowEvent = async (event) => {
   try {
     console.log('Handling follow event:', event);
@@ -500,7 +529,7 @@ const handleFollowEvent = async (event) => {
   }
 };
 
-// ฟังก์ชันหลักสำหรับการจัดการข้อความ
+// ฟังก์ชันหลักสำหรับการจัดการข้อความ (เหมือนเดิม)
 const handleEvent = async (event) => {
   console.log('Event type:', event.type);
   
@@ -524,7 +553,7 @@ const handleEvent = async (event) => {
 
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - แชร์ให้เพื่อนรับเครดิต\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - แชร์ให้เพื่อนรับเครดิต\n• "ตัวอย่าง" - ดูการ์ดที่เพื่อนจะได้รับ\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
   }
 
