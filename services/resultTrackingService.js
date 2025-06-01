@@ -19,6 +19,26 @@ class ResultTrackingService {
     return date.toLocaleTimeString('th-TH', options);
   }
 
+  // 🧮 คำนวณเวลาเช็คผลที่คาดหวัง (entryTime + 5 นาที)
+  calculateExpectedCheckTime(entryTime) {
+    try {
+      const [entryHour, entryMinute] = entryTime.split(':').map(Number);
+      const bangkokNow = this.getBangkokTime();
+      const entryDateTime = new Date(bangkokNow);
+      entryDateTime.setHours(entryHour, entryMinute, 0, 0);
+      
+      // คำนวณเวลาเช็คผล (entryTime + 5 นาที)
+      const checkDateTime = new Date(entryDateTime.getTime() + 5 * 60 * 1000);
+      const checkTimeStr = this.formatBangkokTime(checkDateTime);
+      
+      console.log(`🧮 Expected check time for entry ${entryTime}: ${checkTimeStr}`);
+      return checkTimeStr;
+    } catch (error) {
+      console.error('❌ Error calculating expected check time:', error);
+      return entryTime; // fallback
+    }
+  }
+
   // 🧮 คำนวณ entryTime สำหรับรอบปัจจุบัน (ใช้ lastCheckTime)
   calculateCurrentRoundEntryTime(session) {
     try {
@@ -31,8 +51,13 @@ class ResultTrackingService {
       // รอบ 2-7: ใช้เวลาที่เช็คผลรอบก่อนหน้า
       if (session.lastCheckTime) {
         console.log(`📊 Round ${session.round} - Using last check time as entry: ${session.lastCheckTime}`);
+        console.log(`🔍 Session lastCheckTime value: ${session.lastCheckTime}`);
         return session.lastCheckTime;
       }
+      
+      // 🚨 Debug: ถ้าไม่มี lastCheckTime
+      console.log(`⚠️ Round ${session.round} - No lastCheckTime found!`);
+      console.log(`🔍 Session data:`, JSON.stringify(session, null, 2));
       
       // fallback: ใช้เวลาปัจจุบันที่ปรับเป็น 5-minute intervals
       const bangkokNow = this.getBangkokTime();
@@ -228,6 +253,8 @@ class ResultTrackingService {
       // ตรวจสอบผลว่าชนะหรือแพ้
       const isWin = this.checkWinLose(session.prediction, candleResult.color);
       
+      console.log(`🎯 Prediction: ${session.prediction}, Candle: ${candleResult.color}, Result: ${isWin ? 'WIN' : 'LOSE'}`);
+      
       // บันทึกผล
       session.results.push({
         round: session.round,
@@ -239,8 +266,12 @@ class ResultTrackingService {
         checkTime: candleResult.time
       });
 
-      // 🎯 บันทึกเวลาเช็คผลสำหรับรอบถัดไป
-      session.lastCheckTime = candleResult.time;
+      // 🎯 บันทึกเวลาเช็คผลที่ถูกต้องสำหรับรอบถัดไป
+      // ใช้เวลาที่คำนวณได้ ไม่ใช่เวลาจากแท่งเทียนที่อาจผิด
+      const calculatedCheckTime = this.calculateExpectedCheckTime(effectiveEntryTime);
+      session.lastCheckTime = calculatedCheckTime;
+      
+      console.log(`🎯 Saved lastCheckTime: ${calculatedCheckTime} for next round`);
 
       if (isWin) {
         // ชนะ - จบการติดตาม
@@ -253,16 +284,29 @@ class ResultTrackingService {
     } catch (error) {
       console.error(`❌ Error checking result for user ${userId}:`, error);
       
-      // ส่งข้อความแจ้งข้อผิดพลาด
-      await lineService.pushMessage(userId, {
-        type: 'text',
-        text: `❌ เกิดข้อผิดพลาดในการเช็คผล\n\n💡 ${error.message}\n\n🔄 กำลังลองใหม่ในอีก 30 วินาที...`
-      });
+      // 🔄 ถ้าเป็นปัญหาไม่เจอแท่งเทียน ให้รอแล้วลองใหม่
+      if (error.message.includes('ไม่พบแท่งเทียน')) {
+        await lineService.pushMessage(userId, {
+          type: 'text',
+          text: `⏳ กำลังรอข้อมูลแท่งเทียน...\n\n💡 ${error.message}\n\n🔄 กำลังลองใหม่ในอีก 60 วินาที...`
+        });
 
-      // ลองใหม่ในอีก 30 วินาที
-      setTimeout(() => {
-        this.checkResult(userId);
-      }, 30000);
+        // ลองใหม่ในอีก 60 วินาที
+        setTimeout(() => {
+          this.checkResult(userId);
+        }, 60000);
+      } else {
+        // ส่งข้อความแจ้งข้อผิดพลาดทั่วไป
+        await lineService.pushMessage(userId, {
+          type: 'text',
+          text: `❌ เกิดข้อผิดพลาดในการเช็คผล\n\n💡 ${error.message}\n\n🔄 กำลังลองใหม่ในอีก 30 วินาที...`
+        });
+
+        // ลองใหม่ในอีก 30 วินาที
+        setTimeout(() => {
+          this.checkResult(userId);
+        }, 30000);
+      }
     }
   }
 
