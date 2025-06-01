@@ -8,8 +8,6 @@
   },
   "scripts": {
     "start": "node server.js",
-    "postinstall": "pip install -r requirements.txt",
-    "build": "pip install -r requirements.txt",
     "server": "nodemon server.js",
     "client": "npm start --prefix client",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
