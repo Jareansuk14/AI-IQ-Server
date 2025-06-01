@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - อัปเดตใช้ Compact Flex
+// AI-Server/controllers/lineController.js - อัปเดตระบบแชร์ใหม่
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -12,9 +12,8 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  createCompactShareTargetMessage,   // 🔄 เปลี่ยนเป็น Compact
-  createCompactInviteCard,           // 🔄 เปลี่ยนเป็น Compact
-  createSharePreviewMessage          // 🆕 เพิ่มใหม่
+  createShareReferralCard,
+  createWelcomeCard
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -85,17 +84,28 @@ const saveOrUpdateUser = async (lineUserId, profile) => {
   }
 };
 
-// ส่งข้อความต้อนรับสำหรับผู้ใช้ใหม่
-const sendWelcomeMessage = async (userId, referralCode) => {
+// ส่งข้อความต้อนรับสำหรับผู้ใช้ใหม่ - อัปเดตให้ใช้การ์ด
+const sendWelcomeMessage = async (userId, referralCode, userName = 'คุณ') => {
   try {
-    await lineService.pushMessage(userId, {
-      type: 'text',
-      text: `🎊 ยินดีต้อนรับสู่บริการวิเคราะห์รูปภาพ AI!\n\n✨ คุณได้รับ 10 เครดิตเริ่มต้นฟรี\n\n📝 รหัสแนะนำของคุณคือ: ${referralCode}\n\n💡 ใช้รหัสแนะนำจากเพื่อนเพื่อรับเพิ่มอีก 5 เครดิต หรือแนะนำเพื่อนเพื่อรับ 10 เครดิตต่อการแนะนำ 1 คน\n\n📸 ส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!\n\n💎 เติมเครดิตเพิ่มได้ที่เมนูด้านล่าง`
-    });
+    // ใช้การ์ดต้อนรับแทนข้อความธรรมดา
+    const welcomeCard = createWelcomeCard(referralCode, userName);
+    
+    await lineService.pushMessage(userId, welcomeCard);
     return true;
   } catch (error) {
-    console.error('Error sending welcome message:', error);
-    return false;
+    console.error('Error sending welcome card:', error);
+    
+    // Fallback เป็นข้อความธรรมดาถ้าเกิดข้อผิดพลาด
+    try {
+      await lineService.pushMessage(userId, {
+        type: 'text',
+        text: `🎊 ยินดีต้อนรับ ${userName} สู่บริการวิเคราะห์รูปภาพ AI!\n\n✨ คุณได้รับ 10 เครดิตเริ่มต้นฟรี\n\n📝 รหัสแนะนำของคุณคือ: ${referralCode}\n\n💡 ใช้รหัสแนะนำจากเพื่อนเพื่อรับเพิ่มอีก 5 เครดิต หรือแนะนำเพื่อนเพื่อรับ 10 เครดิตต่อการแนะนำ 1 คน\n\n📸 ส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!\n\n💎 พิมพ์ "แชร์" เพื่อเชิญเพื่อนและรับเครดิตเพิ่ม`
+      });
+      return true;
+    } catch (fallbackError) {
+      console.error('Error sending fallback welcome message:', fallbackError);
+      return false;
+    }
   }
 };
 
@@ -119,7 +129,7 @@ const saveInteraction = async (user, command, imageId, aiResponse, processingTim
   }
 };
 
-// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ
+// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ - อัปเดตระบบแชร์
 const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
   const userId = event.source.userId;
@@ -155,80 +165,34 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
-    // 🔄 อัปเดตส่วนแชร์ใหม่ - ใช้ Compact Flex
+    // 🔥 แก้ไขส่วนการแชร์ให้ใช้การ์ดใหม่
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
       try {
         // ดึงข้อมูลผู้ใช้
         const profile = await lineService.getUserProfile(userId);
-        const referralCode = await creditService.getReferralCode(userId);
-        const userName = profile?.displayName || 'เพื่อน';
+        const { user } = await saveOrUpdateUser(userId, profile);
         
-        console.log(`🔄 Creating compact share message for ${userName} with code ${referralCode}`);
+        // สร้างการ์ดแชร์
+        const shareCard = createShareReferralCard(
+          user.referralCode, 
+          user.displayName || 'เพื่อน'
+        );
         
-        // 🆕 สร้างข้อความทั้ง 3 แบบ
-        const previewMessage = createSharePreviewMessage(referralCode, userName);
-        const shareMessage = createCompactShareTargetMessage(referralCode, userName);
+        return lineService.replyMessage(event.replyToken, shareCard);
         
-        // ส่งข้อความทั้งสอง
-        return lineService.replyMessage(event.replyToken, [
-          previewMessage,  // แสดงตัวอย่างก่อน
-          shareMessage     // ตามด้วยปุ่มแชร์
-        ]);
       } catch (error) {
-        console.error('Error creating compact share message:', error);
+        console.error('Error creating share card:', error);
+        
+        // Fallback เป็นข้อความธรรมดาถ้าเกิดข้อผิดพลาด
+        const referralCode = await creditService.getReferralCode(userId);
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: '❌ เกิดข้อผิดพลาดในการสร้างข้อความแชร์ กรุณาลองใหม่อีกครั้ง'
+          text: `🎯 รหัสแนะนำของคุณคือ: ${referralCode}\n\n🎁 แชร์ให้เพื่อนเพื่อรับ 10 เครดิต!\n\n📝 เพื่อนของคุณสามารถพิมพ์:\nรหัส:${referralCode}\nเพื่อรับเพิ่ม 5 เครดิต\n\n💡 กรุณาลองใหม่อีกครั้งสำหรับการ์ดแชร์`
         });
       }
     }
     
-    // 🆕 เพิ่มคำสั่งดูตัวอย่างการ์ด
-    if (text === 'ตัวอย่าง' || text === 'preview' || text === 'demo') {
-      try {
-        const profile = await lineService.getUserProfile(userId);
-        const referralCode = await creditService.getReferralCode(userId);
-        const userName = profile?.displayName || 'เพื่อน';
-        
-        // สร้างการ์ดตัวอย่าง
-        const demoCard = createCompactInviteCard(referralCode, userName);
-        
-        return lineService.replyMessage(event.replyToken, [
-          {
-            type: 'text',
-            text: '👀 นี่คือการ์ดเชิญที่เพื่อนจะได้รับ:'
-          },
-          demoCard
-        ]);
-      } catch (error) {
-        console.error('Error creating demo card:', error);
-        return lineService.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '❌ เกิดข้อผิดพลาดในการสร้างตัวอย่าง'
-        });
-      }
-    }
-    
-    // 🆕 เพิ่มคำสั่งดูรหัสแนะนำพร้อมสถิติ
-    if (text === 'รหัส' || text === 'code' || text === 'mycode') {
-      try {
-        const referralCode = await creditService.getReferralCode(userId);
-        const stats = await creditService.getReferralStats(userId);
-        
-        return lineService.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `🎯 รหัสแนะนำของคุณ: ${referralCode}\n\n📊 สถิติการแนะนำ:\n• จำนวนคนที่แนะนำ: ${stats.referredCount} คน\n• เครดิตที่ได้รับ: ${stats.totalCreditsEarned} เครดิต\n\n📝 เพื่อนสามารถพิมพ์:\n"รหัส:${referralCode}" เพื่อรับ 5 เครดิตฟรี\n\n🎁 คุณจะได้รับ 10 เครดิตทุกครั้งที่มีคนใช้รหัสของคุณ\n\n📤 กด "แชร์" เพื่อส่งการ์ดเชิญให้เพื่อน\n👀 กด "ตัวอย่าง" เพื่อดูการ์ดที่เพื่อนจะได้รับ`
-        });
-      } catch (error) {
-        console.error('Error getting referral info:', error);
-        return lineService.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูลรหัสแนะนำ'
-        });
-      }
-    }
-    
-    // ระบบใช้รหัสแนะนำ (เหมือนเดิม)
+    // ส่วนการใช้รหัสแนะนำยังคงเหมือนเดิม
     if (text.startsWith('code:') || text.startsWith('รหัส:')) {
       const referralCode = text.split(':')[1].trim();
       
@@ -244,7 +208,7 @@ const handleSpecialCommand = async (event) => {
         
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `✅ ใช้รหัสแนะนำสำเร็จ!\n🎁 คุณได้รับเพิ่ม 5 เครดิต\n💎 เครดิตคงเหลือ: ${result.credits} เครดิต\n\n🎉 ขอบคุณที่ใช้รหัสแนะนำจาก ${result.referrerName || 'เพื่อน'}!`
+          text: `✅ ใช้รหัสแนะนำสำเร็จ!\n🎁 คุณได้รับเพิ่ม 5 เครดิต\n💎 เครดิตคงเหลือ: ${result.credits} เครดิต\n\n🎉 ขอบคุณที่ใช้รหัสแนะนำ!\n📸 ส่งรูปภาพเพื่อทดลองใช้ AI ได้เลย`
         });
       } catch (error) {
         return lineService.replyMessage(event.replyToken, {
@@ -264,7 +228,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// 🔥 ฟังก์ชันจัดการ Postback Events (เหมือนเดิม)
+// 🔥 ฟังก์ชันจัดการ Postback Events - เพิ่ม case สำหรับการ์ดแชร์
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -275,12 +239,35 @@ const handlePostbackEvent = async (event) => {
     console.log('Handling postback event:', action, data);
     
     if (resultTrackingService.isUserBlocked(userId) && 
-        !['continue_trading', 'stop_trading'].includes(action)) {
+        !['continue_trading', 'stop_trading', 'show_share_card'].includes(action)) {
       await resultTrackingService.handleBlockedUserMessage(userId);
       return;
     }
     
     switch (action) {
+      // 🆕 เพิ่ม case สำหรับแสดงการ์ดแชร์
+      case 'show_share_card':
+        try {
+          // ดึงข้อมูลผู้ใช้
+          const profile = await lineService.getUserProfile(userId);
+          const { user } = await saveOrUpdateUser(userId, profile);
+          
+          // สร้างการ์ดแชร์
+          const shareCard = createShareReferralCard(
+            user.referralCode, 
+            user.displayName || 'เพื่อน'
+          );
+          
+          return lineService.replyMessage(event.replyToken, shareCard);
+          
+        } catch (error) {
+          console.error('Error showing share card:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ เกิดข้อผิดพลาดในการแสดงการ์ดแชร์\n💡 กรุณาพิมพ์ "แชร์" เพื่อลองใหม่'
+          });
+        }
+
       case 'buy_credit':
         const packageType = params.get('package');
         
@@ -291,7 +278,7 @@ const handlePostbackEvent = async (event) => {
           );
           
           const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-          const qrCodeURL = `${baseURL}/api/payment/qr/${paymentTransaction._id}`;
+          const qrCodeURL = `${baseURL}/payment/qr/${paymentTransaction._id}`;
           
           const paymentInfoMessage = createPaymentInfoMessage(paymentTransaction, qrCodeURL);
           
@@ -322,7 +309,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis (เหมือนเดิม)
+      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis (อัปเดตใหม่)
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -452,84 +439,30 @@ const handlePostbackEvent = async (event) => {
   }
 };
 
-// 🆕 ฟังก์ชันจัดการเมื่อมีคนเพิ่มเพื่อนผ่านลิงก์แชร์ (เหมือนเดิม)
-const handleFollowWithReferral = async (userId, referralCode) => {
-  try {
-    console.log(`New user ${userId} followed via referral code: ${referralCode}`);
-    
-    // ดึงข้อมูลโปรไฟล์
-    const profile = await lineService.getUserProfile(userId);
-    
-    // สร้างหรืออัปเดตผู้ใช้
-    const { user, isNewUser } = await saveOrUpdateUser(userId, profile);
-    
-    if (isNewUser && referralCode) {
-      // ถ้าเป็นผู้ใช้ใหม่และมีรหัสแนะนำ
-      try {
-        // ใช้รหัสแนะนำอัตโนมัติ
-        await creditService.applyReferralCode(userId, referralCode);
-        
-        // ส่งข้อความต้อนรับพิเศษ
-        await lineService.pushMessage(userId, {
-          type: 'text',
-          text: `🎊 ยินดีต้อนรับสู่ AI Bot!\n\n🎁 คุณได้รับเครดิตพิเศษ!\n• เครดิตเริ่มต้น: 10 เครดิต\n• โบนัสจากเพื่อน: 5 เครดิต\n💎 รวมทั้งหมด: 15 เครดิต\n\n✨ ขอบคุณที่มาจากการแนะนำของเพื่อน!\n\n📸 ส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!\n💰 หรือพิมพ์ "AI-Auto" เพื่อวิเคราะห์ Forex`
-        });
-        
-        return true;
-      } catch (error) {
-        console.error('Error applying referral code on follow:', error);
-        // ถ้าใช้รหัสไม่ได้ ก็ส่งข้อความต้อนรับปกติ
-        await sendWelcomeMessage(userId, user.referralCode);
-        return true;
-      }
-    } else {
-      // ผู้ใช้เก่าหรือไม่มีรหัสแนะนำ
-      if (isNewUser) {
-        await sendWelcomeMessage(userId, user.referralCode);
-      }
-      return true;
-    }
-  } catch (error) {
-    console.error('Error handling follow with referral:', error);
-    return false;
-  }
-};
-
-// ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน) (เหมือนเดิม)
+// ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน) - อัปเดตให้ส่งชื่อผู้ใช้
 const handleFollowEvent = async (event) => {
   try {
     console.log('Handling follow event:', event);
     
-    const userId = event.source.userId;
+    const profile = await lineService.getUserProfile(event.source.userId);
     
-    // ตรวจสอบว่ามี referral code จาก URL parameter หรือไม่
-    let referralCode = null;
+    const { user, isNewUser } = await saveOrUpdateUser(event.source.userId, profile);
     
-    // หา referral code จาก source link params (ถ้ามี)
-    if (event.source.type === 'user' && event.link) {
-      const urlParams = new URLSearchParams(event.link.split('?')[1] || '');
-      referralCode = urlParams.get('ref');
-    }
+    // ส่งการ์ดต้อนรับพร้อมชื่อผู้ใช้
+    await sendWelcomeMessage(
+      event.source.userId, 
+      user.referralCode, 
+      profile?.displayName || user.displayName || 'คุณ'
+    );
     
-    if (referralCode) {
-      return handleFollowWithReferral(userId, referralCode);
-    } else {
-      const profile = await lineService.getUserProfile(userId);
-      const { user, isNewUser } = await saveOrUpdateUser(userId, profile);
-      
-      if (isNewUser) {
-        await sendWelcomeMessage(userId, user.referralCode);
-      }
-      
-      return true;
-    }
+    return true;
   } catch (error) {
     console.error('Error handling follow event:', error);
     return false;
   }
 };
 
-// ฟังก์ชันหลักสำหรับการจัดการข้อความ (เหมือนเดิม)
+// ฟังก์ชันหลักสำหรับการจัดการข้อความ (ไม่เปลี่ยนแปลง)
 const handleEvent = async (event) => {
   console.log('Event type:', event.type);
   
@@ -553,7 +486,7 @@ const handleEvent = async (event) => {
 
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - แชร์ให้เพื่อนรับเครดิต\n• "ตัวอย่าง" - ดูการ์ดที่เพื่อนจะได้รับ\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
   }
 
@@ -614,7 +547,4 @@ const handleEvent = async (event) => {
   }
 };
 
-module.exports = { 
-  handleEvent,
-  handleFollowWithReferral  // เพิ่มเพื่อใช้ในการทดสอบ
-};
+module.exports = { handleEvent };

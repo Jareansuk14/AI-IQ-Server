@@ -1,11 +1,10 @@
-//AI-Server/server.js - โค้ดทั้งหมด
-
+//AI-Server/server.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs'); 
 const { connectDB, checkConnection } = require('./config/db');
-const paymentChecker = require('./services/paymentChecker');
+const paymentChecker = require('./services/paymentChecker'); // เพิ่มบรรทัดนี้
 require('dotenv').config();
 
 const app = express();
@@ -35,7 +34,7 @@ app.use('/images', express.static(path.join(__dirname, 'assets')));
 app.use('/webhook', require('./routes/webhook'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/payment', require('./routes/payment'));
+app.use('/api/payment', require('./routes/payment')); // เปลี่ยนจาก /payment เป็น /api/payment
 app.use('/payment', require('./routes/payment')); // เพิ่ม route เก่าเพื่อ backward compatibility
 
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
@@ -415,280 +414,6 @@ app.get('/api/admin/tracking/sessions', (req, res) => {
   }
 });
 
-// === API endpoints สำหรับระบบ Referral ใหม่ ===
-
-// API สำหรับติดตามการคลิกลิงก์แชร์
-app.get('/invite', async (req, res) => {
-  try {
-    const { ref } = req.query;
-    
-    if (!ref) {
-      return res.status(400).json({ error: 'Missing referral code' });
-    }
-    
-    // ติดตาม click
-    const creditService = require('./services/creditService');
-    const clickInfo = await creditService.trackReferralClick(ref, {
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      timestamp: new Date()
-    });
-    
-    if (!clickInfo) {
-      return res.status(404).json({ error: 'Invalid referral code' });
-    }
-    
-    // Redirect ไปยัง LINE Bot
-    const botLineId = '@033mebpp'; // เปลี่ยนเป็น LINE Bot ID ของคุณ
-    const lineUrl = `https://line.me/R/ti/p/${botLineId}?from=web&ref=${ref}`;
-    
-    // ส่งหน้า HTML ที่มี auto-redirect และข้อมูลการ์ดเชิญ
-    const html = `
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>🎁 เชิญใช้ AI Bot ฟรี!</title>
-        <style>
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .card {
-                background: white;
-                border-radius: 20px;
-                padding: 30px;
-                text-align: center;
-                max-width: 400px;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            }
-            .icon { font-size: 60px; margin-bottom: 20px; }
-            h1 { color: #333; margin: 0 0 10px 0; }
-            p { color: #666; line-height: 1.6; }
-            .btn {
-                background: #177ddc;
-                color: white;
-                padding: 15px 30px;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                cursor: pointer;
-                text-decoration: none;
-                display: inline-block;
-                margin: 20px 0;
-                transition: all 0.3s;
-            }
-            .btn:hover { background: #1565c0; transform: translateY(-2px); }
-            .code { 
-                background: #f5f5f5; 
-                padding: 10px; 
-                border-radius: 5px; 
-                font-family: monospace; 
-                font-size: 18px;
-                font-weight: bold;
-                color: #177ddc;
-                margin: 15px 0;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <div class="icon">🤖</div>
-            <h1>เชิญใช้ AI Bot ฟรี!</h1>
-            <p><strong>${clickInfo.referrer.displayName || 'เพื่อน'}</strong> เชิญคุณใช้ AI วิเคราะห์รูปภาพ</p>
-            
-            <div class="code">รหัส: ${ref}</div>
-            
-            <p>🎁 รับ <strong>5 เครดิตฟรี</strong> เมื่อเพิ่มเพื่อน</p>
-            
-            <a href="${lineUrl}" class="btn">
-                🚀 เพิ่มเพื่อน & รับเครดิต
-            </a>
-            
-            <p style="font-size: 12px; color: #999;">
-                กำลังเปลี่ยนเส้นทางอัตโนมัติ...
-            </p>
-        </div>
-        
-        <script>
-            // Auto redirect หลัง 3 วินาที
-            setTimeout(() => {
-                window.location.href = '${lineUrl}';
-            }, 3000);
-        </script>
-    </body>
-    </html>
-    `;
-    
-    res.send(html);
-  } catch (error) {
-    console.error('Error handling invite link:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// API สำหรับสร้าง QR Code แชร์
-app.get('/api/referral/qr/:referralCode', async (req, res) => {
-  try {
-    const { referralCode } = req.params;
-    
-    const creditService = require('./services/creditService');
-    
-    // ตรวจสอบความถูกต้องของรหัส
-    const validation = await creditService.validateReferralCode(referralCode);
-    if (!validation.valid) {
-      return res.status(404).json({ error: validation.reason });
-    }
-    
-    // สร้าง QR Code
-    const qrResult = await creditService.generateReferralQR(referralCode);
-    
-    // ส่งกลับเป็น image
-    const base64Data = qrResult.qrCodeDataURL.replace(/^data:image\/png;base64,/, '');
-    const imageBuffer = Buffer.from(base64Data, 'base64');
-    
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Disposition', `inline; filename="referral-${referralCode}.png"`);
-    res.send(imageBuffer);
-  } catch (error) {
-    console.error('Error generating referral QR:', error);
-    res.status(500).json({ error: 'Failed to generate QR code' });
-  }
-});
-
-// API สำหรับดูสถิติการแชร์
-app.get('/api/referral/stats/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const creditService = require('./services/creditService');
-    const stats = await creditService.getReferralStats(userId);
-    
-    res.json({
-      message: 'Referral statistics',
-      timestamp: new Date().toISOString(),
-      ...stats
-    });
-  } catch (error) {
-    console.error('Error getting referral stats:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// API สำหรับตรวจสอบรหัสแนะนำ
-app.get('/api/referral/validate/:referralCode', async (req, res) => {
-  try {
-    const { referralCode } = req.params;
-    
-    const creditService = require('./services/creditService');
-    const validation = await creditService.validateReferralCode(referralCode);
-    
-    res.json({
-      referralCode,
-      ...validation,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error validating referral code:', error);
-    res.status(500).json({ error: 'Validation failed' });
-  }
-});
-
-// API สำหรับ admin ดูรายงานการแชร์
-app.get('/api/admin/referral/report', async (req, res) => {
-  try {
-    // ต้องมี middleware ตรวจสอบสิทธิ์ admin
-    const User = require('./models/user');
-    const CreditTransaction = require('./models/creditTransaction');
-    
-    // สถิติรวม
-    const totalUsers = await User.countDocuments();
-    const usersWithReferrals = await User.countDocuments({ referredBy: { $exists: true, $ne: null } });
-    const totalReferralCredits = await CreditTransaction.aggregate([
-      { $match: { type: { $in: ['referral', 'referred'] } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-    
-    // Top referrers
-    const topReferrers = await CreditTransaction.aggregate([
-      { $match: { type: 'referral' } },
-      { $group: { _id: '$user', totalEarned: { $sum: '$amount' }, count: { $sum: 1 } } },
-      { $sort: { totalEarned: -1 } },
-      { $limit: 10 },
-      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
-      { $unwind: '$user' },
-      {
-        $project: {
-          displayName: '$user.displayName',
-          lineUserId: '$user.lineUserId',
-          referralCode: '$user.referralCode',
-          totalEarned: 1,
-          referralCount: '$count'
-        }
-      }
-    ]);
-    
-    res.json({
-      summary: {
-        totalUsers,
-        usersWithReferrals,
-        referralRate: ((usersWithReferrals / totalUsers) * 100).toFixed(2) + '%',
-        totalReferralCredits: totalReferralCredits[0]?.total || 0
-      },
-      topReferrers,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error getting referral report:', error);
-    res.status(500).json({ error: 'Failed to generate report' });
-  }
-});
-
-// API สำหรับทดสอบระบบแชร์
-app.get('/api/test/share/:referralCode', async (req, res) => {
-  try {
-    const { referralCode } = req.params;
-    
-    const creditService = require('./services/creditService');
-    const { createInviteCardMessage } = require('./utils/flexMessages');
-    
-    // ตรวจสอบรหัส
-    const validation = await creditService.validateReferralCode(referralCode);
-    if (!validation.valid) {
-      return res.status(404).json({ error: validation.reason });
-    }
-    
-    // สร้างการ์ดเชิญ
-    const inviteCard = createInviteCardMessage(referralCode, validation.owner.displayName);
-    
-    // สร้างลิงก์ต่างๆ
-    const links = {
-      inviteLink: creditService.generateShareLink(referralCode, 'direct'),
-      lineLink: creditService.generateShareLink(referralCode, 'line'),
-      qrLink: creditService.generateShareLink(referralCode, 'qr')
-    };
-    
-    res.json({
-      message: 'Share system test',
-      referralCode,
-      owner: validation.owner,
-      inviteCard,
-      links,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error testing share system:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // API สำหรับทดสอบทั้งระบบ (comprehensive test)
 app.get('/api/test/full-system', async (req, res) => {
   try {
@@ -753,22 +478,6 @@ app.get('/api/test/full-system', async (req, res) => {
       ready: callImageExists && putImageExists
     };
     
-    // ทดสอบ Referral System
-    try {
-      const creditService = require('./services/creditService');
-      const testCode = 'TEST123';
-      const validation = await creditService.validateReferralCode(testCode);
-      results.tests.referralSystem = {
-        status: 'working',
-        testValidation: validation.valid ? 'valid code found' : 'test code not found (normal)'
-      };
-    } catch (error) {
-      results.tests.referralSystem = {
-        status: 'error',
-        error: error.message
-      };
-    }
-    
     res.json(results);
   } catch (error) {
     console.error('Error running full system test:', error);
@@ -786,7 +495,7 @@ if (process.env.NODE_ENV === 'production') {
     
     app.get('*', (req, res) => {
       // ยกเว้นเส้นทางสำหรับ API และ webhook
-      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment') || req.path.startsWith('/images') || req.path.startsWith('/invite')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment') || req.path.startsWith('/images')) {
         return next();
       }
       res.sendFile(path.join(clientBuildPath, 'index.html'));
@@ -845,14 +554,10 @@ connectDB()
       console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
       console.log(`Result Tracking System: READY`);
       console.log(`IQ Option Integration: READY`);
-      console.log(`Referral System: READY`);
       console.log(`Available API endpoints:`);
       console.log(`  - GET /api/test/full-system`);
       console.log(`  - GET /api/tracking/stats`);
       console.log(`  - GET /api/iq-option/test`);
-      console.log(`  - GET /invite?ref=CODE (Referral landing page)`);
-      console.log(`  - GET /api/referral/stats/:userId`);
-      console.log(`  - GET /api/admin/referral/report`);
     });
   });
 

@@ -1,5 +1,4 @@
-//AI-Server/services/creditService.js - โค้ดทั้งหมด
-
+//AI-Server/services/creditService.js
 const User = require('../models/user');
 const CreditTransaction = require('../models/creditTransaction');
 const lineService = require('./lineService');
@@ -52,7 +51,7 @@ class CreditService {
 
   // === ฟังก์ชันใหม่สำหรับแอดมิน ===
 
-  // เพิ่มเครดิตโดยแอดมิน (รองรับการหักเครดิตด้วย)
+// เพิ่มเครดิตโดยแอดมิน (รองรับการหักเครดิตด้วย)
   async addCreditByAdmin(userId, amount, reason, adminId) {
     try {
       console.log(`Admin ${adminId} ${amount > 0 ? 'adding' : 'subtracting'} ${Math.abs(amount)} credits to user ${userId}`);
@@ -266,185 +265,11 @@ class CreditService {
     }
   }
 
-  // === ฟังก์ชันระบบแชร์ใหม่ ===
+  // === ฟังก์ชันเดิมที่มีอยู่แล้ว ===
 
-  // 🆕 ติดตามการคลิกลิงก์แชร์
-  async trackReferralClick(referralCode, clickerInfo = {}) {
-    try {
-      console.log(`📊 Tracking referral click for code: ${referralCode}`);
-      
-      // หาเจ้าของรหัส
-      const referrer = await User.findOne({ referralCode });
-      if (!referrer) {
-        console.log(`❌ Referral code ${referralCode} not found`);
-        return null;
-      }
-
-      // บันทึกการคลิก (อาจจะสร้าง model ReferralClick แยก)
-      console.log(`✅ Referral click tracked: ${referralCode} by ${clickerInfo.ip || 'unknown'}`);
-      
-      return {
-        referrer: {
-          lineUserId: referrer.lineUserId,
-          displayName: referrer.displayName
-        },
-        clickTimestamp: new Date()
-      };
-    } catch (error) {
-      console.error('Error tracking referral click:', error);
-      return null;
-    }
-  }
-
-  // 🆕 ใช้รหัสแนะนำผ่านลิงก์ (สำหรับผู้ใช้ใหม่)
-  async applyReferralCodeFromLink(userId, referralCode) {
-    try {
-      console.log(`🔗 Applying referral from link: ${userId} using ${referralCode}`);
-      
-      // ตรวจสอบผู้ใช้ปัจจุบัน
-      const user = await User.findOne({ lineUserId: userId });
-      if (!user) {
-        throw new Error('ไม่พบข้อมูลผู้ใช้');
-      }
-
-      // ตรวจสอบว่าเป็นผู้ใช้ใหม่หรือไม่ (สร้างไม่เกิน 5 นาที)
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      if (user.firstInteraction < fiveMinutesAgo) {
-        console.log('❌ User is not new, referral code from link rejected');
-        throw new Error('รหัสแนะนำใช้ได้เฉพาะผู้ใช้ใหม่เท่านั้น');
-      }
-
-      // ใช้ฟังก์ชันเดิม
-      return await this.applyReferralCode(userId, referralCode);
-    } catch (error) {
-      console.error('Error applying referral code from link:', error);
-      throw error;
-    }
-  }
-
-  // 🆕 สร้างลิงก์แชร์พร้อม tracking
-  generateShareLink(referralCode, platform = 'line') {
-    const botLineId = '@033mebpp'; // LINE Bot ID ของคุณ
-    const baseUrl = process.env.BASE_URL || 'https://yourbot.com';
-    
-    const shareLinks = {
-      line: `https://line.me/R/ti/p/${botLineId}?from=invite&ref=${referralCode}`,
-      direct: `${baseUrl}/invite?ref=${referralCode}`,
-      qr: `${baseUrl}/api/referral/qr/${referralCode}`
-    };
-    
-    return shareLinks[platform] || shareLinks.line;
-  }
-
-  // 🆕 สถิติการแชร์
-  async getReferralStats(userId) {
-    try {
-      const user = await User.findOne({ lineUserId: userId });
-      if (!user) {
-        throw new Error('ไม่พบผู้ใช้');
-      }
-
-      // จำนวนคนที่ใช้รหัสแนะนำ
-      const referredCount = await User.countDocuments({ 
-        referredBy: user.referralCode 
-      });
-
-      // เครดิตที่ได้จากการแนะนำ
-      const referralCredits = await CreditTransaction.aggregate([
-        { 
-          $match: { 
-            user: user._id,
-            type: 'referral'
-          }
-        },
-        { $group: { _id: null, total: { $sum: "$amount" } }}
-      ]);
-
-      // รายชื่อคนที่แนะนำ (5 คนล่าสุด)
-      const referredUsers = await User.find({ 
-        referredBy: user.referralCode 
-      })
-      .select('displayName firstInteraction')
-      .sort({ firstInteraction: -1 })
-      .limit(5);
-
-      return {
-        referralCode: user.referralCode,
-        referredCount,
-        totalCreditsEarned: referralCredits[0]?.total || 0,
-        recentReferrals: referredUsers,
-        shareLink: this.generateShareLink(user.referralCode)
-      };
-    } catch (error) {
-      console.error('Error getting referral stats:', error);
-      throw error;
-    }
-  }
-
-  // 🆕 ตรวจสอบความถูกต้องของรหัสแนะนำ
-  async validateReferralCode(referralCode) {
-    try {
-      const owner = await User.findOne({ referralCode });
-      
-      if (!owner) {
-        return {
-          valid: false,
-          reason: 'รหัสแนะนำไม่ถูกต้อง'
-        };
-      }
-
-      return {
-        valid: true,
-        owner: {
-          displayName: owner.displayName,
-          lineUserId: owner.lineUserId
-        }
-      };
-    } catch (error) {
-      console.error('Error validating referral code:', error);
-      return {
-        valid: false,
-        reason: 'เกิดข้อผิดพลาดในการตรวจสอบ'
-      };
-    }
-  }
-
-  // 🆕 สร้าง QR Code สำหรับแชร์
-  async generateReferralQR(referralCode) {
-    try {
-      const shareLink = this.generateShareLink(referralCode);
-      
-      // ใช้ qrCodeService แต่แทนที่จะเป็น PromptPay ให้เป็น URL
-      const QRCode = require('qrcode');
-      
-      const qrCodeDataURL = await QRCode.toDataURL(shareLink, {
-        errorCorrectionLevel: 'M',
-        type: 'image/png',
-        quality: 0.92,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        },
-        width: 512
-      });
-
-      return {
-        qrCodeDataURL,
-        shareLink,
-        referralCode
-      };
-    } catch (error) {
-      console.error('Error generating referral QR:', error);
-      throw error;
-    }
-  }
-
-  // ใช้รหัสแนะนำ (อัปเดตใหม่)
+  // ใช้รหัสแนะนำ
   async applyReferralCode(userId, referralCode) {
     try {
-      console.log(`📝 Applying referral code: ${userId} using ${referralCode}`);
-      
       // ตรวจสอบผู้ใช้ปัจจุบัน
       const user = await User.findOne({ lineUserId: userId });
       if (!user) {
@@ -492,8 +317,6 @@ class CreditService {
         description: `ได้รับเครดิตจากการแนะนำผู้ใช้ ${user.displayName || user.lineUserId}`
       });
 
-      console.log(`✅ Referral success: ${user.lineUserId} (+5) via ${referrer.lineUserId} (+10)`);
-
       // ส่งการแจ้งเตือนไปยังผู้ถูกแนะนำ
       await lineService.pushMessage(user.lineUserId, {
         type: 'text',
@@ -508,8 +331,7 @@ class CreditService {
 
       return {
         credits: user.credits,
-        referred: true,
-        referrerName: referrer.displayName
+        referred: true
       };
     } catch (error) {
       console.error('Error applying referral code:', error);
