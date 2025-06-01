@@ -19,6 +19,42 @@ class ResultTrackingService {
     return date.toLocaleTimeString('th-TH', options);
   }
 
+  // 🕐 Helper: เพิ่ม 5 นาทีให้กับเวลา (format: "HH:MM")
+  addFiveMinutesToTime(timeString) {
+    try {
+      if (!timeString || typeof timeString !== 'string') {
+        console.log('⚠️ Invalid timeString:', timeString);
+        return timeString;
+      }
+
+      // แยกชั่วโมงและนาที
+      const [hours, minutes] = timeString.split(':').map(Number);
+      
+      if (isNaN(hours) || isNaN(minutes)) {
+        console.log('⚠️ Invalid time format:', timeString);
+        return timeString;
+      }
+
+      // สร้าง Date object ใน Bangkok timezone
+      const bangkokNow = this.getBangkokTime();
+      const timeDate = new Date(bangkokNow);
+      timeDate.setHours(hours, minutes, 0, 0);
+      
+      // บวก 5 นาที
+      const newTime = new Date(timeDate.getTime() + 5 * 60 * 1000);
+      
+      // แปลงกลับเป็น string format HH:MM
+      const newTimeString = this.formatBangkokTime(newTime);
+      
+      console.log(`🕐 Added 5 minutes: ${timeString} → ${newTimeString}`);
+      
+      return newTimeString;
+    } catch (error) {
+      console.error('❌ Error adding 5 minutes to time:', error);
+      return timeString; // fallback ใช้เวลาเดิม
+    }
+  }
+
   // 🧮 คำนวณเวลาเช็คผลที่คาดหวัง (entryTime + 5 นาที)
   calculateExpectedCheckTime(entryTime) {
     try {
@@ -321,7 +357,7 @@ class ResultTrackingService {
     return false; // อื่นๆ = แพ้
   }
 
-  // 🎉 จัดการเมื่อชนะ (รับ effectiveEntryTime)
+  // 🎉 จัดการเมื่อชนะ (แก้ไขให้ใช้ฟังก์ชันใหม่)
   async handleWin(userId, session, candleResult, effectiveEntryTime) {
     try {
       console.log(`🎉 User ${userId} WON at round ${session.round}`);
@@ -331,8 +367,8 @@ class ResultTrackingService {
       this.blockedUsers.delete(userId);
 
       // คำนวณเวลาเข้าเทรดจริงและเวลาเช็คผล
-      const entryTimeDisplay = effectiveEntryTime; // ใช้ effectiveEntryTime แทน
-      const checkTimeDisplay = candleResult.time;
+      const entryTimeDisplay = effectiveEntryTime;
+      const checkTimeDisplay = this.addFiveMinutesToTime(candleResult.time); // 🔥 ใช้ฟังก์ชันใหม่
 
       // ส่งข้อความแสดงความยินดี
       await lineService.pushMessage(userId, {
@@ -354,7 +390,7 @@ class ResultTrackingService {
     }
   }
 
-  // ❌ จัดการเมื่อแพ้ (แก้ไขให้รับ effectiveEntryTime)
+  // ❌ จัดการเมื่อแพ้ (แก้ไขให้ใช้ฟังก์ชันใหม่)
   async handleLose(userId, session, candleResult, effectiveEntryTime) {
     try {
       console.log(`❌ User ${userId} LOST at round ${session.round}`);
@@ -369,8 +405,8 @@ class ResultTrackingService {
       // ยังไม่ครบ 7 รอบ - ทำต่อ
       session.round++;
 
-      const entryTimeDisplay = effectiveEntryTime; // ใช้ effectiveEntryTime แทน
-      const checkTimeDisplay = candleResult.time;
+      const entryTimeDisplay = effectiveEntryTime;
+      const checkTimeDisplay = this.addFiveMinutesToTime(candleResult.time); // 🔥 ใช้ฟังก์ชันใหม่
 
       await lineService.pushMessage(userId, {
         type: 'text',
@@ -391,7 +427,7 @@ class ResultTrackingService {
     }
   }
 
-  // 💀 จัดการเมื่อแพ้ครบ 7 รอบ (แก้ไขให้รับ effectiveEntryTime)
+  // 💀 จัดการเมื่อแพ้ครบ 7 รอบ (แก้ไขให้ใช้ฟังก์ชันใหม่)
   async handleMaxRoundsReached(userId, session, candleResult, effectiveEntryTime) {
     try {
       console.log(`💀 User ${userId} LOST all 7 rounds`);
@@ -400,8 +436,8 @@ class ResultTrackingService {
       session.isActive = false;
       this.blockedUsers.delete(userId);
 
-      const entryTimeDisplay = effectiveEntryTime; // ใช้ effectiveEntryTime แทน
-      const checkTimeDisplay = candleResult.time;
+      const entryTimeDisplay = effectiveEntryTime;
+      const checkTimeDisplay = this.addFiveMinutesToTime(candleResult.time); // 🔥 ใช้ฟังก์ชันใหม่
 
       await lineService.pushMessage(userId, {
         type: 'text',
@@ -461,14 +497,13 @@ class ResultTrackingService {
     };
   }
 
-  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (เหมือนเดิม)
+  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (แก้ไขให้สั้นลง)
   async handleBlockedUserMessage(userId) {
     const session = this.trackingSessions.get(userId);
     if (session) {
-      const nextCheckTime = this.getCheckTimeDisplay(session.entryTime);
       return lineService.pushMessage(userId, {
         type: 'text',
-        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n🔍 เช็คผลตอน: ${nextCheckTime}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
+        text: `🚫 คุณกำลังติดตามผล ${session.pair}\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
       });
     }
   }
