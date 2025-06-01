@@ -2304,13 +2304,13 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
           {
             type: "button",
             style: "primary",
+            label: "📤 แชร์การ์ดนี้",
             action: {
               type: "shareTargetPicker"
             },
             color: "#722ed1",
             height: "md",
-            margin: "sm",
-            label: "📤 แชร์การ์ดนี้"
+            margin: "sm"
           },
           {
             type: "button",
@@ -2468,6 +2468,313 @@ function createReferralInputMessage() {
               data: "action=share_to_get_referral"
             },
             color: "#177ddc",
+            height: "md"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
+// 📊 การ์ดสถิติการแนะนำ (แบบละเอียด)
+function createReferralStatsMessage(userStats) {
+  const {
+    referralCode,
+    totalReferred = 0,
+    totalEarned = 0,
+    recentReferrals = [],
+    monthlyStats = { thisMonth: 0, lastMonth: 0 },
+    ranking = 0
+  } = userStats;
+
+  return {
+    type: "flex",
+    altText: "📊 สถิติการแนะนำ",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "text",
+                text: "📊",
+                size: "xl",
+                color: "#ffffff",
+                flex: 0
+              },
+              {
+                type: "text",
+                text: "สถิติการแนะนำ",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                flex: 4,
+                margin: "md"
+              }
+            ]
+          },
+          {
+            type: "text",
+            text: `รหัสของคุณ: ${referralCode}`,
+            color: "#ffffff",
+            size: "sm",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        backgroundColor: "#1890ff",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          // สถิติหลัก
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: `${totalReferred}`,
+                    weight: "bold",
+                    size: "xl",
+                    color: "#1890ff",
+                    align: "center"
+                  },
+                  {
+                    type: "text",
+                    text: "คนที่แนะนำ",
+                    size: "xs",
+                    color: "#8c8c8c",
+                    align: "center"
+                  }
+                ],
+                flex: 1
+              },
+              {
+                type: "separator",
+                color: "#303030"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: `${totalEarned}`,
+                    weight: "bold",
+                    size: "xl",
+                    color: "#49aa19",
+                    align: "center"
+                  },
+                  {
+                    type: "text",
+                    text: "เครดิตที่ได้",
+                    size: "xs",
+                    color: "#8c8c8c",
+                    align: "center"
+                  }
+                ],
+                flex: 1
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // สถิติรายเดือน
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "📅 สถิติรายเดือน",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "🗓️",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เดือนนี้:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${monthlyStats.thisMonth} คน`,
+                    weight: "bold",
+                    color: "#49aa19",
+                    size: "sm",
+                    flex: 2,
+                    align: "end"
+                  }
+                ],
+                margin: "md"
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "📈",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เดือนที่แล้ว:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${monthlyStats.lastMonth} คน`,
+                    weight: "bold",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    align: "end"
+                  }
+                ],
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          // อันดับ (ถ้ามี)
+          ...(ranking > 0 ? [{
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          }, {
+            type: "box",
+            layout: "baseline",
+            contents: [
+              {
+                type: "text",
+                text: "🏆",
+                size: "sm",
+                flex: 0
+              },
+              {
+                type: "text",
+                text: "อันดับการแนะนำ:",
+                color: "#8c8c8c",
+                size: "sm",
+                flex: 3,
+                margin: "sm"
+              },
+              {
+                type: "text",
+                text: `#${ranking}`,
+                weight: "bold",
+                color: "#d89614",
+                size: "md",
+                flex: 1,
+                align: "end"
+              }
+            ],
+            margin: "lg"
+          }] : []),
+          // เพื่อนล่าสุด (ถ้ามี)
+          ...(recentReferrals.length > 0 ? [{
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          }, {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "👥 เพื่อนล่าสุด",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              ...recentReferrals.slice(0, 3).map(friend => ({
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "•",
+                    size: "sm",
+                    color: "#177ddc",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: friend.name || "เพื่อน",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 3,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: friend.date,
+                    color: "#8c8c8c",
+                    size: "xs",
+                    flex: 2,
+                    align: "end"
+                  }
+                ],
+                margin: "sm"
+              }))
+            ],
+            margin: "lg"
+          }] : [])
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "postback",
+              label: "🎯 แชร์เพิ่มเติม",
+              data: "action=view_referral_share"
+            },
+            color: "#1890ff",
             height: "md"
           }
         ],
@@ -2670,5 +2977,6 @@ module.exports = {
   // เพิ่มฟังก์ชัน Referral ใหม่
   createReferralShareMessage,
   createReferralInputMessage,
+  createReferralStatsMessage,
   createReferralSuccessMessage
 };
