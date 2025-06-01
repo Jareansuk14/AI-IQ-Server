@@ -1,4 +1,4 @@
-// AI-Server/services/iqOptionService.js - Simplified Version
+// AI-Server/services/iqOptionService.js - Complete Version (ไม่ต้องแก้ไข)
 const axios = require('axios');
 require('dotenv').config();
 
@@ -133,16 +133,28 @@ class IQOptionService {
 
       console.log(`📊 Got ${data.values.length} candles from Twelve Data`);
 
-      // เอาแท่งเทียนล่าสุด (index 0 คือใหม่สุด)
-      const latestCandle = data.values[0];
+      // 🎯 สำหรับ Binary Options: ต้องเช็คแท่งที่ปิดแล้ว ไม่ใช่แท่งปัจจุบัน
+      // data.values[0] = แท่งปัจจุบัน (ยังไม่ปิด)
+      // data.values[1] = แท่งก่อนหน้า (ปิดแล้ว) ← ควรเช็คแท่งนี้
+      
+      let targetCandle;
+      if (data.values.length >= 2) {
+        // ใช้แท่งก่อนหน้า (แท่งที่ปิดแล้ว)
+        targetCandle = data.values[1];
+        console.log(`🎯 Using previous candle (closed): ${targetCandle.datetime}`);
+      } else {
+        // fallback: ใช้แท่งปัจจุบัน
+        targetCandle = data.values[0];
+        console.log(`⚠️ Using current candle (may still be active): ${targetCandle.datetime}`);
+      }
 
       return {
-        datetime: latestCandle.datetime,
-        open: latestCandle.open,
-        close: latestCandle.close,
-        high: latestCandle.high,
-        low: latestCandle.low,
-        volume: latestCandle.volume
+        datetime: targetCandle.datetime,
+        open: targetCandle.open,
+        close: targetCandle.close,
+        high: targetCandle.high,
+        low: targetCandle.low,
+        volume: targetCandle.volume
       };
 
     } catch (error) {
