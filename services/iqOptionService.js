@@ -16,10 +16,10 @@ class IQOptionService {
     return new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
   }
 
-  // 🎯 ฟังก์ชันหลักใหม่: ดูแท่งเทียนปัจจุบัน (เรียบง่าย)
-  async getCurrentCandle(pair) {
+  // 🎯 ฟังก์ชันหลักใหม่: ดูแท่งเทียนปัจจุบัน (แก้ไขให้เลือกแท่งถูกต้อง)
+  async getCurrentCandle(pair, entryTime = null) {
     try {
-      console.log(`🔍 Getting current candle for ${pair}`);
+      console.log(`🔍 Getting current candle for ${pair}${entryTime ? ` (entry: ${entryTime})` : ''}`);
 
       // ตรวจสอบ API Key
       if (!this.apiKey) {
@@ -35,8 +35,8 @@ class IQOptionService {
       const twelveSymbol = this.convertToTwelveDataSymbol(pair);
       console.log(`📊 Twelve Data symbol: ${twelveSymbol}`);
 
-      // ดึงข้อมูลแท่งเทียนล่าสุด
-      const candleData = await this.getLatestCandle(twelveSymbol);
+      // ดึงข้อมูลแท่งเทียนล่าสุด พร้อมส่ง entryTime ไปด้วย
+      const candleData = await this.getLatestCandle(twelveSymbol, entryTime);
       
       if (!candleData) {
         throw new Error('ไม่สามารถดึงข้อมูลแท่งเทียนได้');
@@ -98,8 +98,46 @@ class IQOptionService {
     }
   }
 
-  // 🌐 ดึงข้อมูลแท่งเทียนล่าสุดจาก Twelve Data
-  async getLatestCandle(twelveSymbol) {
+  // 🔍 หาแท่งเทียนที่ตรงกับเวลาที่ต้องการมากที่สุด
+  findBestMatchCandle(candles, targetDateTime) {
+    let bestMatch = null;
+    let smallestDiff = Infinity;
+    
+    console.log(`🎯 Target time (Bangkok): ${this.formatBangkokTime(targetDateTime)}`);
+    
+    for (const candle of candles) {
+      const candleTime = new Date(candle.datetime);
+      // แปลงเป็น Bangkok time เพื่อเปรียบเทียบ
+      const candleBangkok = new Date(candleTime.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+      const timeDiff = Math.abs(candleBangkok.getTime() - targetDateTime.getTime());
+      
+      const candleTimeStr = this.formatBangkokTime(candleBangkok);
+      console.log(`📊 Checking candle: ${candleTimeStr} (diff: ${Math.round(timeDiff / 1000)}s)`);
+      
+      // หาแท่งที่มีความต่างเวลาน้อยที่สุด
+      if (timeDiff < smallestDiff) {
+        smallestDiff = timeDiff;
+        bestMatch = candle;
+      }
+    }
+    
+    // ถ้าความต่างมากกว่า 10 นาที ถือว่าไม่ตรงกัน
+    if (smallestDiff > 10 * 60 * 1000) {
+      console.log(`⚠️ Best match time difference too large: ${Math.round(smallestDiff / 1000)}s`);
+      return null;
+    }
+    
+    console.log(`🎯 Best match found with ${Math.round(smallestDiff / 1000)}s difference`);
+    return bestMatch;
+  }
+
+  // 🇹🇭 Helper: แปลง Date เป็น Bangkok time string
+  formatBangkokTime(date, options = { hour: '2-digit', minute: '2-digit' }) {
+    return date.toLocaleTimeString('th-TH', options);
+  }
+
+  // 🌐 ดึงข้อมูลแท่งเทียนล่าสุดจาก Twelve Data (แก้ไขให้เลือกแท่งถูกต้อง)
+  async getLatestCandle(twelveSymbol, entryTime = null) {
     try {
       const url = `${this.baseURL}/time_series`;
       
@@ -107,7 +145,7 @@ class IQOptionService {
         symbol: twelveSymbol,
         interval: '5min',
         apikey: this.apiKey,
-        outputsize: 2, // ดึงแค่ 2 แท่งล่าสุด (ปัจจุบันและก่อนหน้า)
+        outputsize: 10, // เพิ่มจาก 2 เป็น 10 เพื่อหาแท่งที่ถูกต้อง
         format: 'JSON'
       };
 
@@ -139,19 +177,44 @@ class IQOptionService {
 
       console.log(`📊 Got ${data.values.length} candles from Twelve Data`);
 
-      // 🎯 สำหรับ Binary Options: ต้องเช็คแท่งที่ปิดแล้ว ไม่ใช่แท่งปัจจุบัน
-      // data.values[0] = แท่งปัจจุบัน (ยังไม่ปิด)
-      // data.values[1] = แท่งก่อนหน้า (ปิดแล้ว) ← ควรเช็คแท่งนี้
-      
+      // 🎯 สำหรับ Binary Options: เลือกแท่งที่ถูกต้องตาม entryTime
       let targetCandle;
-      if (data.values.length >= 2) {
-        // ใช้แท่งก่อนหน้า (แท่งที่ปิดแล้ว)
-        targetCandle = data.values[1];
-        console.log(`🎯 Using previous candle (closed): ${targetCandle.datetime}`);
+      
+      if (entryTime) {
+        // คำนวณเวลาที่ต้องการ (entryTime + 5 นาที)
+        const [entryHour, entryMinute] = entryTime.split(':').map(Number);
+        const bangkokNow = this.getBangkokTime();
+        const entryDateTime = new Date(bangkokNow);
+        entryDateTime.setHours(entryHour, entryMinute, 0, 0);
+        
+        // เวลาที่แท่งเทียนควรปิด (entryTime + 5 นาที)
+        const targetDateTime = new Date(entryDateTime.getTime() + 5 * 60 * 1000);
+        const targetTimeStr = this.formatBangkokTime(targetDateTime);
+        
+        console.log(`🎯 Looking for candle that closes at: ${targetTimeStr}`);
+        
+        // หาแท่งที่มีเวลาตรงกัน หรือใกล้เคียงที่สุด
+        targetCandle = this.findBestMatchCandle(data.values, targetDateTime);
+        
+        if (targetCandle) {
+          const candleTime = new Date(targetCandle.datetime);
+          const candleBangkok = new Date(candleTime.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+          const candleTimeStr = this.formatBangkokTime(candleBangkok);
+          console.log(`✅ Found matching candle: ${candleTimeStr}`);
+        } else {
+          console.log(`⚠️ No exact match found, using latest closed candle`);
+          // ถ้าหาไม่เจอ ใช้แท่งก่อนหน้า (แท่งที่ปิดแล้ว)
+          targetCandle = data.values.length >= 2 ? data.values[1] : data.values[0];
+        }
       } else {
-        // fallback: ใช้แท่งปัจจุบัน
-        targetCandle = data.values[0];
-        console.log(`⚠️ Using current candle (may still be active): ${targetCandle.datetime}`);
+        // ถ้าไม่มี entryTime ใช้วิธีเดิม (แท่งก่อนหน้า)
+        if (data.values.length >= 2) {
+          targetCandle = data.values[1]; // แท่งก่อนหน้า (ปิดแล้ว)
+          console.log(`🎯 Using previous candle (closed): ${targetCandle.datetime}`);
+        } else {
+          targetCandle = data.values[0]; // fallback
+          console.log(`⚠️ Using current candle (may still be active): ${targetCandle.datetime}`);
+        }
       }
 
       return {
@@ -189,8 +252,8 @@ class IQOptionService {
       console.log(`🔄 Legacy function called: ${pair}, ${entryTime}, round ${round}`);
       console.log(`⚠️ Using simplified getCurrentCandle() instead`);
       
-      // ใช้ฟังก์ชันใหม่แทน
-      const result = await this.getCurrentCandle(pair);
+      // ใช้ฟังก์ชันใหม่แทน (ส่ง entryTime ไปด้วย)
+      const result = await this.getCurrentCandle(pair, entryTime);
       
       if (result.error) {
         return {
@@ -285,7 +348,7 @@ class IQOptionService {
         };
       }
 
-      // ทดสอบด้วยการดูแท่งเทียนปัจจุบัน
+      // ทดสอบด้วยการดูแท่งเทียนปัจจุบัน (ไม่ส่ง entryTime ในการทดสอบ)
       const testResult = await this.getCurrentCandle('EUR/USD');
       
       if (testResult.error) {
@@ -346,8 +409,8 @@ class IQOptionService {
           break;
         }
         
-        // ใช้ฟังก์ชันใหม่ getCurrentCandle()
-        const result = await this.getCurrentCandle(pair);
+        // ใช้ฟังก์ชันใหม่ getCurrentCandle() (ส่ง entryTime สำหรับทดสอบ)
+        const result = await this.getCurrentCandle(pair, entryTime);
         result.round = round; // เพิ่ม round number
         result.entryTime = entryTime; // เพิ่ม entry time
         results.push(result);
@@ -488,18 +551,19 @@ class IQOptionService {
     }
   }
 
-  // 🔧 Helper method สำหรับ debug (อัปเดต)
-  async debugCurrentCandle(pair) {
+  // 🔧 Helper method สำหรับ debug (อัปเดต - รองรับ entryTime)
+  async debugCurrentCandle(pair, entryTime = null) {
     try {
-      console.log(`🔧 Debug mode - Simplified getCurrentCandle()`);
+      console.log(`🔧 Debug mode - getCurrentCandle() with smart candle selection`);
       console.log(`📊 Pair: ${pair}`);
+      console.log(`⏰ Entry Time: ${entryTime || 'Not specified'}`);
       console.log(`🔑 API Key: ${this.apiKey ? 'Configured' : 'Not configured'}`);
       console.log(`📈 Request Count: ${this.requestCount}/${this.dailyLimit}`);
 
       const twelveSymbol = this.convertToTwelveDataSymbol(pair);
       console.log(`🌐 Twelve Data Symbol: ${twelveSymbol}`);
 
-      const result = await this.getCurrentCandle(pair);
+      const result = await this.getCurrentCandle(pair, entryTime);
       
       console.log(`📊 Final Result:`, JSON.stringify(result, null, 2));
       

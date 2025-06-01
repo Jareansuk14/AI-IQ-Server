@@ -166,8 +166,8 @@ class ResultTrackingService {
         text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n⏳ กรุณารอสักครู่`
       });
 
-      // 🎯 เรียก API แบบง่าย - ดูแท่งเทียนปัจจุบัน
-      const candleResult = await iqOptionService.getCurrentCandle(session.pair);
+      // 🎯 เรียก API แบบง่าย - ดูแท่งเทียนที่ถูกต้องตาม entryTime
+      const candleResult = await iqOptionService.getCurrentCandle(session.pair, session.entryTime);
 
       console.log(`📊 Candle result:`, candleResult);
 
