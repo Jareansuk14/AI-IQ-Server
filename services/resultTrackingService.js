@@ -62,27 +62,37 @@ class ResultTrackingService {
     }
   }
 
-  // คำนวณเวลาที่ต้องเช็คผล (ปรับปรุงใหม่)
+  // คำนวณเวลาที่ต้องเช็คผล
   calculateCheckTime(entryTimeStr, round) {
-    try {
-      const now = new Date();
-      
-      // สำหรับรอบแรก: ใช้เวลาปัจจุบัน + 5 นาที
-      // สำหรับรอบถัดไป: ใช้เวลาปัจจุบัน + (5 * รอบ) นาที
-      const delayMinutes = 5 * round;
-      const checkTime = new Date(now.getTime() + (delayMinutes * 60 * 1000));
-      
-      console.log(`🕐 Current time: ${now.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
-      console.log(`🎯 Check time (Bangkok): ${checkTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
-      console.log(`⏱️ Delay: ${delayMinutes} minutes`);
-      
-      return checkTime;
-      
-    } catch (error) {
-      console.error('Error calculating check time:', error);
-      // Fallback: ใช้เวลาปัจจุบัน + 5 นาที
-      return new Date(Date.now() + (5 * 60 * 1000));
+    // entryTimeStr = "13:45"
+    const [hours, minutes] = entryTimeStr.split(':').map(Number);
+    
+    const now = new Date();
+    const entryTime = new Date();
+    entryTime.setHours(hours, minutes, 0, 0);
+    
+    // ถ้าเวลาเข้าเทรดยังไม่ถึง ให้ใช้วันถัดไป
+    if (entryTime <= now) {
+      // สำหรับรอบแรก ต้องรอให้ถึงเวลาเข้าเทรดก่อน
+      if (round === 1) {
+        entryTime.setDate(entryTime.getDate() + 1);
+      }
     }
+    
+    // เพิ่ม 5 นาที * รอบ สำหรับเวลาปิดแท่งเทียน
+    let checkTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
+    
+    // คำนวณ delay ในการเช็ค
+    let delayMs = checkTime.getTime() - now.getTime();
+    
+    // แก้ไข timezone offset ถ้า delay มากเกิน 7 ชั่วโมง (25200000 ms)
+    if (delayMs > 7 * 60 * 60 * 1000) {
+      delayMs = delayMs - (7 * 60 * 60 * 1000); // ลบ 7 ชั่วโมง
+      checkTime = new Date(now.getTime() + delayMs);
+      console.log(`🕐 Timezone offset corrected: ${Math.round(delayMs / 1000)} seconds`);
+    }
+    
+    return checkTime;
   }
 
   // เช็คผลจาก IQ Option
@@ -102,13 +112,10 @@ class ResultTrackingService {
         text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n⏳ กรุณารอสักครู่`
       });
 
-      // สร้าง datetime string สำหรับ Python script
-      const targetDateTime = this.createTargetDateTime(session.entryTime, session.round);
-
       // เรียก IQ Option API เพื่อดูแท่งเทียน
       const candleResult = await iqOptionService.getCandleColor(
         session.pair,
-        targetDateTime, // ส่ง full datetime แทน
+        session.entryTime,
         session.round
       );
 
@@ -151,40 +158,6 @@ class ResultTrackingService {
       setTimeout(() => {
         this.checkResult(userId);
       }, 30000);
-    }
-  }
-
-  // สร้าง target datetime string สำหรับ Python script
-  createTargetDateTime(entryTimeStr, round) {
-    try {
-      const now = new Date();
-      
-      // สำหรับการเช็คผล: ใช้เวลาปัจจุบัน + (5 * รอบ) นาที
-      const delayMinutes = 5 * round;
-      const targetTime = new Date(now.getTime() + (delayMinutes * 60 * 1000));
-      
-      // แปลงเป็นเวลาไทย
-      const bangkokTime = new Date(targetTime.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
-      
-      // Format เป็น string ในรูปแบบ "YYYY-MM-DD HH:MM"
-      const year = bangkokTime.getFullYear();
-      const month = String(bangkokTime.getMonth() + 1).padStart(2, '0');
-      const day = String(bangkokTime.getDate()).padStart(2, '0');
-      const hour = String(bangkokTime.getHours()).padStart(2, '0');
-      const minute = String(bangkokTime.getMinutes()).padStart(2, '0');
-      
-      const targetDateTime = `${year}-${month}-${day} ${hour}:${minute}`;
-      
-      console.log(`🎯 Target datetime for round ${round}: ${targetDateTime} (Bangkok time)`);
-      
-      return targetDateTime;
-      
-    } catch (error) {
-      console.error('Error creating target datetime:', error);
-      // Fallback: ใช้เวลาปัจจุบัน
-      const now = new Date();
-      const bangkokTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
-      return bangkokTime.toISOString().slice(0, 16).replace('T', ' ');
     }
   }
 
@@ -248,16 +221,10 @@ class ResultTrackingService {
         text: `❌ รอบที่ ${session.round - 1}: ไม่ถูกต้อง\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n🔄 ทำต่อรอบที่ ${session.round}/${session.maxRounds}\n⏳ รอแท่งเทียนถัดไป...`
       });
 
-      // คำนวณเวลาสำหรับรอบถัดไป
-      const nextCheckTime = this.calculateCheckTime(session.entryTime, session.round);
-      const delayMs = nextCheckTime.getTime() - Date.now();
-
-      console.log(`⏰ Next check in ${Math.round(delayMs / 1000)} seconds`);
-
-      // ตั้งเวลาสำหรับเช็ครอบถัดไป
+      // ตั้งเวลาสำหรับเช็ครอบถัดไป (อีก 5 นาที)
       setTimeout(() => {
         this.checkResult(userId);
-      }, delayMs);
+      }, 5 * 60 * 1000); // 300 วินาที
 
     } catch (error) {
       console.error('Error handling lose:', error);
