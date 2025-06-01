@@ -1,39 +1,52 @@
-// AI-Server/services/iqOptionService.js - Pure Node.js Version
+// AI-Server/services/iqOptionService.js - Twelve Data API Version
 const axios = require('axios');
+require('dotenv').config();
 
 class IQOptionService {
   constructor() {
-    // ไม่ต้องใช้ Python script อีกต่อไป
-    this.baseURL = 'https://query1.finance.yahoo.com';
+    this.baseURL = 'https://api.twelvedata.com';
+    this.apiKey = process.env.TWELVE_DATA_API_KEY;
     this.timeout = 30000; // 30 วินาที
+    this.requestCount = 0; // นับจำนวนการเรียก API
+    this.dailyLimit = 800; // Free plan limit
   }
 
-  // 🔥 ดึงสีแท่งเทียนจาก Yahoo Finance โดยตรง (Pure Node.js)
+  // 🔥 ดึงสีแท่งเทียนจาก Twelve Data API
   async getCandleColor(pair, entryTime, round) {
     try {
-      console.log(`🌐 Calling Yahoo Finance API directly for ${pair} at ${entryTime}, round ${round}`);
+      console.log(`🌐 Calling Twelve Data API for ${pair} at ${entryTime}, round ${round}`);
 
-      // แปลง pair เป็น Yahoo Finance symbol
-      const yahooSymbol = this.convertPairToYahooSymbol(pair);
-      console.log(`📊 Yahoo symbol: ${yahooSymbol}`);
+      // ตรวจสอบ API Key
+      if (!this.apiKey) {
+        throw new Error('❌ TWELVE_DATA_API_KEY ไม่ได้ตั้งค่าใน .env file');
+      }
 
-      // คำนวณ timestamp เป้าหมาย
-      const targetTimestamp = this.calculateTargetTime(entryTime, round);
-      if (!targetTimestamp) {
+      // ตรวจสอบ daily limit
+      if (this.requestCount >= this.dailyLimit) {
+        throw new Error('❌ เกินขีดจำกัดการเรียก API วันนี้ (800 requests/day)');
+      }
+
+      // แปลง pair เป็นรูปแบบ Twelve Data
+      const twelveSymbol = this.convertToTwelveDataSymbol(pair);
+      console.log(`📊 Twelve Data symbol: ${twelveSymbol}`);
+
+      // คำนวณเวลาเป้าหมาย
+      const targetDateTime = this.calculateTargetDateTime(entryTime, round);
+      if (!targetDateTime) {
         throw new Error('ไม่สามารถคำนวณเวลาได้');
       }
 
-      console.log(`⏰ Target timestamp: ${targetTimestamp}`);
+      console.log(`⏰ Target datetime: ${targetDateTime.toISOString()}`);
 
-      // ดึงข้อมูลจาก Yahoo Finance
-      const candleData = await this.getYahooFinanceData(yahooSymbol, targetTimestamp);
+      // ดึงข้อมูลจาก Twelve Data
+      const candleData = await this.getTwelveDataCandle(twelveSymbol, targetDateTime);
       
       if (!candleData) {
-        throw new Error('ไม่สามารถดึงข้อมูลจาก Yahoo Finance ได้');
+        throw new Error('ไม่สามารถดึงข้อมูลจาก Twelve Data ได้');
       }
 
       // วิเคราะห์สีแท่งเทียน
-      const { open, close, timestamp, volume } = candleData;
+      const { open, close, datetime, volume } = candleData;
       
       console.log(`📊 Open: ${open}, Close: ${close}`);
 
@@ -49,9 +62,8 @@ class IQOptionService {
 
       console.log(`🎯 Candle color: ${color}`);
 
-      // สร้าง timestamp แสดงผล
-      const candleTime = new Date(timestamp * 1000);
-      const displayTime = candleTime.toLocaleTimeString('th-TH', { 
+      // สร้างเวลาแสดงผล
+      const displayTime = new Date(datetime).toLocaleTimeString('th-TH', { 
         hour: '2-digit', 
         minute: '2-digit',
         timeZone: 'Asia/Bangkok'
@@ -61,15 +73,17 @@ class IQOptionService {
         pair: pair,
         time: displayTime,
         candleSize: "5min",
-        open: Math.round(open * 100000) / 100000,
-        close: Math.round(close * 100000) / 100000,
+        open: parseFloat(open),
+        close: parseFloat(close),
         color: color,
         round: round,
         entryTime: entryTime,
-        targetTimestamp: targetTimestamp,
-        actualTimestamp: timestamp,
-        volume: volume || 0,
-        source: "Yahoo Finance (Node.js)",
+        targetDateTime: targetDateTime.toISOString(),
+        actualDateTime: datetime,
+        volume: parseFloat(volume) || 0,
+        source: "Twelve Data API",
+        symbol: twelveSymbol,
+        requestCount: this.requestCount,
         timestamp: new Date().toISOString()
       };
 
@@ -83,100 +97,112 @@ class IQOptionService {
         pair: pair,
         entryTime: entryTime,
         round: round,
+        requestCount: this.requestCount,
         timestamp: new Date().toISOString()
       };
     }
   }
 
-  // 🌐 ดึงข้อมูลจาก Yahoo Finance API โดยตรง
-  async getYahooFinanceData(yahooSymbol, targetTimestamp) {
+  // 🌐 ดึงข้อมูลจาก Twelve Data API
+  async getTwelveDataCandle(symbol, targetDateTime) {
     try {
-      // คำนวณช่วงเวลาสำหรับดึงข้อมูล
-      const endTime = targetTimestamp + (3600 * 24);   // +24 ชั่วโมง
-      const startTime = targetTimestamp - (3600 * 24); // -24 ชั่วโมง
+      // Method 1: ใช้ Time Series API เพื่อหาแท่งเทียนที่ใกล้เคียงที่สุด
+      const endDate = new Date(targetDateTime.getTime() + (3600 * 1000 * 6)); // +6 ชั่วโมง
+      const startDate = new Date(targetDateTime.getTime() - (3600 * 1000 * 6)); // -6 ชั่วโมง
 
-      const url = `${this.baseURL}/v8/finance/chart/${yahooSymbol}`;
+      const url = `${this.baseURL}/time_series`;
       
       const params = {
-        period1: startTime,
-        period2: endTime,
-        interval: '5m',
-        includePrePost: false
+        symbol: symbol,
+        interval: '5min',
+        apikey: this.apiKey,
+        start_date: startDate.toISOString().split('T')[0] + ' ' + startDate.toTimeString().split(' ')[0],
+        end_date: endDate.toISOString().split('T')[0] + ' ' + endDate.toTimeString().split(' ')[0],
+        format: 'JSON',
+        outputsize: 100 // จำกัดจำนวนข้อมูล
       };
 
-      console.log(`🔗 Fetching: ${url}`);
+      console.log(`🔗 Fetching from Twelve Data: ${url}`);
       console.log(`📊 Params:`, params);
 
       const response = await axios.get(url, {
         params,
         timeout: this.timeout,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'application/json',
-          'Accept-Language': 'en-US,en;q=0.9'
+          'User-Agent': 'Mozilla/5.0 (compatible; TradingBot/1.0)',
+          'Accept': 'application/json'
         }
       });
 
+      // นับจำนวนการเรียก API
+      this.requestCount++;
+      console.log(`📈 API Request count: ${this.requestCount}/${this.dailyLimit}`);
+
       const data = response.data;
       
-      if (!data.chart?.result?.[0]) {
-        throw new Error('ไม่พบข้อมูลจาก Yahoo Finance');
+      if (data.status === 'error') {
+        throw new Error(`Twelve Data API Error: ${data.message}`);
       }
 
-      const result = data.chart.result[0];
-      const timestamps = result.timestamp;
-      const indicators = result.indicators.quote[0];
+      if (!data.values || data.values.length === 0) {
+        throw new Error('ไม่พบข้อมูลแท่งเทียนใน Twelve Data');
+      }
 
-      const opens = indicators.open;
-      const closes = indicators.close;
-      const volumes = indicators.volume || [];
+      console.log(`📊 Got ${data.values.length} candles from Twelve Data`);
 
-      console.log(`📊 Got ${timestamps.length} data points`);
-
-      // หาแท่งเทียนที่ใกล้เคียงกับ target_timestamp ที่สุด
-      let closestIndex = null;
+      // หาแท่งเทียนที่ใกล้เคียงกับเวลาเป้าหมายที่สุด
+      let closestCandle = null;
       let minDiff = Infinity;
 
-      for (let i = 0; i < timestamps.length; i++) {
-        if (timestamps[i] && opens[i] !== null && closes[i] !== null) {
-          const diff = Math.abs(timestamps[i] - targetTimestamp);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestIndex = i;
-          }
+      for (const candle of data.values) {
+        const candleTime = new Date(candle.datetime);
+        const diff = Math.abs(candleTime.getTime() - targetDateTime.getTime());
+        
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestCandle = candle;
         }
       }
 
-      if (closestIndex === null) {
+      if (!closestCandle) {
         throw new Error('ไม่พบแท่งเทียนที่ตรงกับเวลาที่ต้องการ');
       }
 
-      console.log(`🎯 Found closest candle at index ${closestIndex}, diff: ${minDiff} seconds`);
+      const diffMinutes = Math.round(minDiff / (1000 * 60));
+      console.log(`🎯 Found closest candle, diff: ${diffMinutes} minutes`);
 
-      // ส่งคืนข้อมูลแท่งเทียน
       return {
-        timestamp: timestamps[closestIndex],
-        open: opens[closestIndex],
-        close: closes[closestIndex],
-        volume: volumes[closestIndex] || 0
+        datetime: closestCandle.datetime,
+        open: closestCandle.open,
+        close: closestCandle.close,
+        high: closestCandle.high,
+        low: closestCandle.low,
+        volume: closestCandle.volume
       };
 
     } catch (error) {
-      console.error(`❌ Yahoo Finance API error: ${error.message}`);
+      console.error(`❌ Twelve Data API error: ${error.message}`);
       
       if (error.response) {
         console.error(`❌ Response status: ${error.response.status}`);
         console.error(`❌ Response data:`, error.response.data);
+        
+        // ตรวจสอบ error จาก API
+        if (error.response.data?.message?.includes('API key')) {
+          throw new Error('API Key ไม่ถูกต้องหรือหมดอายุ');
+        }
+        if (error.response.data?.message?.includes('limit')) {
+          throw new Error('เกินขีดจำกัดการเรียก API');
+        }
       }
       
-      throw new Error(`ไม่สามารถดึงข้อมูลจาก Yahoo Finance ได้: ${error.message}`);
+      throw new Error(`ไม่สามารถดึงข้อมูลจาก Twelve Data ได้: ${error.message}`);
     }
   }
 
-  // ⏰ คำนวณเวลาเป้าหมาย
-  calculateTargetTime(entryTimeStr, round) {
+  // ⏰ คำนวณเวลาเป้าหมาย (แก้ไขให้ใช้กับ Twelve Data)
+  calculateTargetDateTime(entryTimeStr, round) {
     try {
-      // แปลง entryTimeStr เป็น datetime
       const [hours, minutes] = entryTimeStr.split(':').map(Number);
       
       const now = new Date();
@@ -191,8 +217,7 @@ class IQOptionService {
       // คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
       const targetTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
       
-      // แปลงเป็น Unix timestamp
-      return Math.floor(targetTime.getTime() / 1000);
+      return targetTime;
       
     } catch (error) {
       console.error(`❌ Error calculating target time: ${error.message}`);
@@ -200,70 +225,98 @@ class IQOptionService {
     }
   }
 
-  // 🔄 แปลงชื่อคู่เงินเป็น Yahoo Finance symbol
-  convertPairToYahooSymbol(pair) {
+  // 🔄 แปลงชื่อคู่เงินเป็น Twelve Data symbol
+  convertToTwelveDataSymbol(pair) {
+    // Twelve Data ใช้รูปแบบเดียวกับ Forex standard
     const symbolMap = {
-      // Forex pairs
-      'EUR/USD': 'EURUSD=X',
-      'EURUSD': 'EURUSD=X',
-      'GBP/USD': 'GBPUSD=X',
-      'GBPUSD': 'GBPUSD=X',
-      'USD/JPY': 'USDJPY=X',
-      'USDJPY': 'USDJPY=X',
-      'USD/CHF': 'USDCHF=X',
-      'USDCHF': 'USDCHF=X',
-      'AUD/USD': 'AUDUSD=X',
-      'AUDUSD': 'AUDUSD=X',
-      'NZD/USD': 'NZDUSD=X',
-      'NZDUSD': 'NZDUSD=X',
-      'USD/CAD': 'USDCAD=X',
-      'USDCAD': 'USDCAD=X',
-      'EUR/GBP': 'EURGBP=X',
-      'EURGBP': 'EURGBP=X',
-      'EUR/JPY': 'EURJPY=X',
-      'EURJPY': 'EURJPY=X',
-      'GBP/JPY': 'GBPJPY=X',
-      'GBPJPY': 'GBPJPY=X',
+      // Forex pairs (Twelve Data ใช้ format เดียวกัน)
+      'EUR/USD': 'EUR/USD',
+      'EURUSD': 'EUR/USD',
+      'GBP/USD': 'GBP/USD',
+      'GBPUSD': 'GBP/USD',
+      'USD/JPY': 'USD/JPY',
+      'USDJPY': 'USD/JPY',
+      'USD/CHF': 'USD/CHF',
+      'USDCHF': 'USD/CHF',
+      'AUD/USD': 'AUD/USD',
+      'AUDUSD': 'AUD/USD',
+      'NZD/USD': 'NZD/USD',
+      'NZDUSD': 'NZD/USD',
+      'USD/CAD': 'USD/CAD',
+      'USDCAD': 'USD/CAD',
+      'EUR/GBP': 'EUR/GBP',
+      'EURGBP': 'EUR/GBP',
+      'EUR/JPY': 'EUR/JPY',
+      'EURJPY': 'EUR/JPY',
+      'GBP/JPY': 'GBP/JPY',
+      'GBPJPY': 'GBP/JPY',
       
       // Crypto pairs
-      'BTC/USD': 'BTC-USD',
-      'BTCUSD': 'BTC-USD',
-      'ETH/USD': 'ETH-USD',
-      'ETHUSD': 'ETH-USD',
-      'LTC/USD': 'LTC-USD',
-      'LTCUSD': 'LTC-USD',
-      'ADA/USD': 'ADA-USD',
-      'ADAUSD': 'ADA-USD',
+      'BTC/USD': 'BTC/USD',
+      'BTCUSD': 'BTC/USD',
+      'ETH/USD': 'ETH/USD',
+      'ETHUSD': 'ETH/USD',
+      'LTC/USD': 'LTC/USD',
+      'LTCUSD': 'LTC/USD',
+      'ADA/USD': 'ADA/USD',
+      'ADAUSD': 'ADA/USD',
       
-      // Commodities
-      'GOLD': 'GC=F',
-      'XAUUSD': 'GC=F'
+      // Commodities (Twelve Data format)
+      'GOLD': 'XAU/USD',
+      'XAUUSD': 'XAU/USD'
     };
     
-    return symbolMap[pair] || 'EURUSD=X';
+    return symbolMap[pair] || 'EUR/USD';
   }
 
-  // 🧪 ทดสอบการเชื่อมต่อ Yahoo Finance
+  // 🧪 ทดสอบการเชื่อมต่อ Twelve Data
   async testConnection() {
     try {
-      console.log('🧪 Testing Yahoo Finance connection (Node.js)...');
+      console.log('🧪 Testing Twelve Data API connection...');
       
-      const testResult = await this.getCandleColor('EUR/USD', '09:00', 1);
-      
-      if (testResult.error) {
+      if (!this.apiKey) {
         return {
           success: false,
-          error: testResult.error,
-          message: 'การเชื่อมต่อ Yahoo Finance ล้มเหลว',
-          method: 'Pure Node.js'
+          error: 'TWELVE_DATA_API_KEY ไม่ได้ตั้งค่าใน .env file',
+          message: 'กรุณาเพิ่ม API Key ใน .env file',
+          method: 'Twelve Data API'
+        };
+      }
+
+      // ทดสอบด้วย Quote API (ใช้ request น้อยกว่า)
+      const url = `${this.baseURL}/quote`;
+      const params = {
+        symbol: 'EUR/USD',
+        apikey: this.apiKey
+      };
+
+      const response = await axios.get(url, { params, timeout: this.timeout });
+      this.requestCount++;
+
+      const data = response.data;
+
+      if (data.status === 'error') {
+        return {
+          success: false,
+          error: data.message,
+          message: 'การเชื่อมต่อ Twelve Data ล้มเหลว',
+          method: 'Twelve Data API',
+          requestCount: this.requestCount
         };
       }
 
       return {
         success: true,
-        message: 'เชื่อมต่อ Yahoo Finance สำเร็จ (Pure Node.js)',
-        method: 'Node.js HTTP Request',
-        data: testResult
+        message: 'เชื่อมต่อ Twelve Data สำเร็จ',
+        method: 'Twelve Data API',
+        data: {
+          symbol: data.symbol,
+          price: data.close,
+          change: data.change,
+          percent_change: data.percent_change
+        },
+        requestCount: this.requestCount,
+        remainingRequests: this.dailyLimit - this.requestCount
       };
 
     } catch (error) {
@@ -272,7 +325,8 @@ class IQOptionService {
         success: false,
         error: error.message,
         message: 'ไม่สามารถทดสอบการเชื่อมต่อได้',
-        method: 'Pure Node.js'
+        method: 'Twelve Data API',
+        requestCount: this.requestCount
       };
     }
   }
@@ -281,14 +335,28 @@ class IQOptionService {
   async getMultipleCandles(pair, entryTime, rounds) {
     const results = [];
     
+    console.log(`🔍 Fetching ${rounds} candles for ${pair}`);
+    
     for (let round = 1; round <= rounds; round++) {
       try {
-        console.log(`🔍 Fetching candle for round ${round}/${rounds}`);
+        console.log(`📊 Round ${round}/${rounds} - Request count: ${this.requestCount}/${this.dailyLimit}`);
+        
+        // ตรวจสอบ daily limit
+        if (this.requestCount >= this.dailyLimit) {
+          results.push({
+            error: 'เกินขีดจำกัดการเรียก API วันนี้',
+            round,
+            pair,
+            entryTime,
+            requestCount: this.requestCount
+          });
+          break;
+        }
         
         const result = await this.getCandleColor(pair, entryTime, round);
         results.push(result);
         
-        // รอ 1 วินาทีระหว่างการเรียก
+        // รอ 1 วินาทีระหว่างการเรียก (เพื่อไม่ให้ rate limit)
         if (round < rounds) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
@@ -297,7 +365,8 @@ class IQOptionService {
           error: error.message,
           round,
           pair,
-          entryTime
+          entryTime,
+          requestCount: this.requestCount
         });
       }
     }
@@ -309,21 +378,32 @@ class IQOptionService {
   isMarketOpen() {
     const now = new Date();
     const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const hour = now.getHours();
     
     return {
       forex: day !== 0 && day !== 6,  // Forex ปิดสุดสัปดาห์
       crypto: true,                   // Crypto เปิดตลอด
-      timestamp: now.toISOString()
+      tradingHours: hour >= 9 && hour <= 17, // Trading hours 9-17
+      timestamp: now.toISOString(),
+      timezone: 'Asia/Bangkok'
     };
   }
 
   // 📈 ดูสถิติการใช้งาน
   getUsageStats() {
+    const remainingRequests = Math.max(0, this.dailyLimit - this.requestCount);
+    const usagePercent = Math.round((this.requestCount / this.dailyLimit) * 100);
+
     return {
-      method: 'Pure Node.js (No Python dependencies)',
-      dataSource: 'Yahoo Finance HTTP API',
+      method: 'Twelve Data API',
+      dataSource: 'Twelve Data Financial API',
       apiEndpoint: this.baseURL,
       timeout: `${this.timeout / 1000} seconds`,
+      apiKeyConfigured: !!this.apiKey,
+      requestCount: this.requestCount,
+      dailyLimit: this.dailyLimit,
+      remainingRequests: remainingRequests,
+      usagePercent: `${usagePercent}%`,
       marketStatus: this.isMarketOpen(),
       supportedPairs: [
         // Forex
@@ -333,44 +413,100 @@ class IQOptionService {
         // Crypto  
         'BTC/USD', 'ETH/USD', 'LTC/USD', 'ADA/USD',
         // Commodities
-        'GOLD'
+        'XAU/USD (GOLD)'
       ],
       features: [
-        '✅ Pure Node.js (No Python)',
-        '✅ Direct HTTP API calls',
-        '✅ ฟรี 100% ไม่จำกัด',
-        '✅ ไม่ต้อง API Key',
-        '✅ Forex + Crypto + Commodities',
-        '✅ Real-time data',
-        '✅ 5-minute candlesticks',
-        '✅ No external dependencies'
+        '✅ Official Financial Data API',
+        '✅ High-quality real-time data',
+        '✅ 800 requests/day (Free plan)',
+        '✅ Forex + Stock + Crypto + Commodities',
+        '✅ 1-minute to 1-month intervals',
+        '✅ Technical indicators built-in',
+        '✅ Professional-grade accuracy',
+        '✅ Rate limiting protection'
       ],
       advantages: [
-        'ไม่ต้องติดตั้ง Python',
-        'ไม่ต้องจัดการ child process',
-        'เร็วกว่า (ไม่ต้องผ่าน Python)',
-        'ง่ายต่อการ debug',
-        'น้อย dependencies',
-        'เสถียรกว่า'
+        'ข้อมูลแม่นยำกว่า Yahoo Finance',
+        'Official API มี documentation ชัดเจน',
+        'Support ทีมเป็นมืออาชีพ',
+        'Rate limiting ป้องกัน API abuse',
+        'ข้อมูล real-time ล่าช้าน้อย',
+        'รองรับ Technical Indicators'
       ],
+      pricing: {
+        free: '800 requests/day',
+        basic: '$8/month - 5,000 requests/day',
+        standard: '$24/month - 15,000 requests/day',
+        professional: '$49/month - 50,000 requests/day'
+      },
       lastChecked: new Date().toISOString()
     };
+  }
+
+  // 🔧 รีเซ็ต request counter (สำหรับวันใหม่)
+  resetDailyCounter() {
+    this.requestCount = 0;
+    console.log('🔄 Daily request counter reset to 0');
+  }
+
+  // 💰 ตรวจสอบ quote แบบง่าย (ใช้ request น้อย)
+  async getQuote(pair) {
+    try {
+      if (!this.apiKey) {
+        throw new Error('TWELVE_DATA_API_KEY ไม่ได้ตั้งค่า');
+      }
+
+      const symbol = this.convertToTwelveDataSymbol(pair);
+      const url = `${this.baseURL}/quote`;
+      
+      const params = {
+        symbol: symbol,
+        apikey: this.apiKey
+      };
+
+      const response = await axios.get(url, { params, timeout: this.timeout });
+      this.requestCount++;
+
+      const data = response.data;
+
+      if (data.status === 'error') {
+        throw new Error(data.message);
+      }
+
+      return {
+        symbol: data.symbol,
+        price: parseFloat(data.close),
+        change: parseFloat(data.change),
+        percent_change: data.percent_change,
+        high: parseFloat(data.high),
+        low: parseFloat(data.low),
+        volume: parseFloat(data.volume) || 0,
+        timestamp: data.datetime,
+        source: 'Twelve Data',
+        requestCount: this.requestCount
+      };
+
+    } catch (error) {
+      console.error(`❌ Quote error: ${error.message}`);
+      throw error;
+    }
   }
 
   // 🔧 Helper method สำหรับ debug
   async debugCandleData(pair, entryTime, round) {
     try {
-      console.log(`🔧 Debug mode - Fetching candle data`);
+      console.log(`🔧 Debug mode - Twelve Data API`);
       console.log(`📊 Pair: ${pair}`);
       console.log(`⏰ Entry Time: ${entryTime}`);
       console.log(`🎯 Round: ${round}`);
+      console.log(`🔑 API Key: ${this.apiKey ? 'Configured' : 'Not configured'}`);
+      console.log(`📈 Request Count: ${this.requestCount}/${this.dailyLimit}`);
 
-      const yahooSymbol = this.convertPairToYahooSymbol(pair);
-      const targetTimestamp = this.calculateTargetTime(entryTime, round);
+      const twelveSymbol = this.convertToTwelveDataSymbol(pair);
+      const targetDateTime = this.calculateTargetDateTime(entryTime, round);
 
-      console.log(`🌐 Yahoo Symbol: ${yahooSymbol}`);
-      console.log(`⏰ Target Timestamp: ${targetTimestamp}`);
-      console.log(`📅 Target Date: ${new Date(targetTimestamp * 1000).toISOString()}`);
+      console.log(`🌐 Twelve Data Symbol: ${twelveSymbol}`);
+      console.log(`⏰ Target DateTime: ${targetDateTime?.toISOString()}`);
 
       const result = await this.getCandleColor(pair, entryTime, round);
       
