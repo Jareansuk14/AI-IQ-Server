@@ -1,4 +1,4 @@
-//AI-Server/server.js
+//AI-Server/server.js - อัปเดตเพิ่ม LIFF API Routes
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,27 +19,52 @@ app.use(express.json({
 
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
-// เพิ่มการตั้งค่า CORS ที่เฉพาะเจาะจงมากขึ้น
+// เพิ่มการตั้งค่า CORS ที่เฉพาะเจาะจงมากขึ้น (รองรับ LIFF)
 app.use(cors({
-  origin: ['http://localhost:3001', 'https://your-frontend-url.com', '*'],
+  origin: [
+    'http://localhost:3001', 
+    'https://your-frontend-url.com', 
+    'https://liff.line.me',  // เพิ่มสำหรับ LIFF
+    'https://*.line.me',     // เพิ่มสำหรับ LINE domains
+    '*'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Line-Signature'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Line-Signature', 'X-Requested-With'],
   credentials: true
 }));
 
-// Serve static images for CALL/PUT signals (เพิ่มสำหรับ AI-Auto)
+// Serve static files
 app.use('/images', express.static(path.join(__dirname, 'assets')));
+app.use('/public', express.static(path.join(__dirname, 'public'))); // เพิ่มสำหรับ LIFF
 
-// เส้นทาง
+// เส้นทาง API Routes
 app.use('/webhook', require('./routes/webhook'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/payment', require('./routes/payment')); // เปลี่ยนจาก /payment เป็น /api/payment
-app.use('/payment', require('./routes/payment')); // เพิ่ม route เก่าเพื่อ backward compatibility
+app.use('/api/payment', require('./routes/payment')); 
+app.use('/payment', require('./routes/payment')); // backward compatibility
+
+// 🆕 เพิ่ม LIFF Routes
+app.use('/api/liff', require('./routes/liff'));
+app.use('/liff', require('./routes/liff')); // สำหรับ serve HTML โดยตรง
 
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
 app.get('/', (req, res) => {
-  res.send('LINE Bot server is running!');
+  res.send(`
+    <h1>🤖 AI LINE Bot Server</h1>
+    <p>✅ Server is running!</p>
+    <h2>📱 LIFF Apps:</h2>
+    <ul>
+      <li><a href="/liff/referral-share" target="_blank">🎁 Referral Share App</a></li>
+    </ul>
+    <h2>🔗 API Endpoints:</h2>
+    <ul>
+      <li><a href="/api/status" target="_blank">📊 System Status</a></li>
+      <li><a href="/api/liff/status" target="_blank">📱 LIFF Status</a></li>
+      <li><a href="/api/liff/test" target="_blank">🧪 LIFF API Test</a></li>
+      <li><a href="/api/test/full-system" target="_blank">🔧 Full System Test</a></li>
+    </ul>
+  `);
 });
 
 // เพิ่มเส้นทางสำหรับตรวจสอบสถานะระบบ
@@ -49,7 +74,13 @@ app.get('/api/status', (req, res) => {
     server: 'running',
     database: dbConnected ? 'connected' : 'disconnected',
     environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    features: {
+      paymentChecker: 'active',
+      resultTracking: 'active',
+      referralSystem: 'active',
+      liffApps: 'active' // เพิ่ม LIFF
+    }
   });
 });
 
@@ -143,7 +174,7 @@ app.get('/api/emails/recent', async (req, res) => {
   }
 });
 
-// === เพิ่ม API endpoints สำหรับ AI-Auto ===
+// === API endpoints สำหรับ AI-Auto ===
 
 // API endpoint สำหรับทดสอบ AI-Auto
 app.get('/api/test/forex', async (req, res) => {
@@ -414,6 +445,41 @@ app.get('/api/admin/tracking/sessions', (req, res) => {
   }
 });
 
+// 🆕 API สำหรับ Referral System
+app.get('/api/referral/top-referrers', async (req, res) => {
+  try {
+    const creditService = require('./services/creditService');
+    const limit = parseInt(req.query.limit) || 10;
+    const topReferrers = await creditService.getTopReferrers(limit);
+    
+    res.json({
+      message: 'Top referrers',
+      timestamp: new Date().toISOString(),
+      limit,
+      topReferrers
+    });
+  } catch (error) {
+    console.error('Error getting top referrers:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/referral/system-report', async (req, res) => {
+  try {
+    const creditService = require('./services/creditService');
+    const report = await creditService.getReferralSystemReport();
+    
+    res.json({
+      message: 'Referral system report',
+      timestamp: new Date().toISOString(),
+      ...report
+    });
+  } catch (error) {
+    console.error('Error getting referral system report:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // API สำหรับทดสอบทั้งระบบ (comprehensive test)
 app.get('/api/test/full-system', async (req, res) => {
   try {
@@ -478,6 +544,30 @@ app.get('/api/test/full-system', async (req, res) => {
       ready: callImageExists && putImageExists
     };
     
+    // 🆕 ทดสอบ LIFF Apps
+    const liffAppExists = fs.existsSync(path.join(__dirname, 'public', 'liff-referral-share.html'));
+    results.tests.liffApps = {
+      referralShareApp: liffAppExists,
+      ready: liffAppExists
+    };
+    
+    // 🆕 ทดสอบ Referral System
+    try {
+      const creditService = require('./services/creditService');
+      const report = await creditService.getReferralSystemReport();
+      results.tests.referralSystem = {
+        status: 'working',
+        totalUsers: report.overview.totalUsers,
+        usersWithReferrals: report.overview.usersWithReferrals,
+        activeReferrers: report.overview.activeReferrers
+      };
+    } catch (error) {
+      results.tests.referralSystem = {
+        status: 'error',
+        error: error.message
+      };
+    }
+    
     res.json(results);
   } catch (error) {
     console.error('Error running full system test:', error);
@@ -494,25 +584,20 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(clientBuildPath));
     
     app.get('*', (req, res) => {
-      // ยกเว้นเส้นทางสำหรับ API และ webhook
-      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment') || req.path.startsWith('/images')) {
+      // ยกเว้นเส้นทางสำหรับ API, webhook, payment, images, และ liff
+      if (req.path.startsWith('/api/') || 
+          req.path.startsWith('/webhook') || 
+          req.path.startsWith('/payment') || 
+          req.path.startsWith('/images') ||
+          req.path.startsWith('/liff') ||
+          req.path.startsWith('/public')) {
         return next();
       }
       res.sendFile(path.join(clientBuildPath, 'index.html'));
     });
   } else {
     console.log('Client build folder not found. Skipping static file serving.');
-    
-    // เพิ่ม route สำหรับ root path เพื่อไม่ให้เกิด 404
-    app.get('/', (req, res) => {
-      res.json({ message: 'LINE Bot API is running!' });
-    });
   }
-} else {
-  // เพิ่ม route สำหรับ root path ในโหมด development
-  app.get('/', (req, res) => {
-    res.json({ message: 'LINE Bot API is running in development mode!' });
-  });
 }
 
 // ตั้งค่า error handler สำหรับการจัดการข้อผิดพลาดทั้งหมด
@@ -532,7 +617,6 @@ connectDB()
     console.log('Database connection attempt completed');
     
     // เพิ่มคำสั่งนี้เพื่อสร้าง Rich Menu (ใช้เฉพาะครั้งแรกหรือเมื่อต้องการอัปเดต Rich Menu)
-    // ถ้าต้องการให้ทำงานเฉพาะเมื่อเริ่ม server ในครั้งแรก ให้ใส่เงื่อนไขตรวจสอบ
     if (process.env.CREATE_RICH_MENU === 'true') {
       require('./utils/createRichMenu');
     }
@@ -549,15 +633,22 @@ connectDB()
   .finally(() => {
     // เริ่มเซิร์ฟเวอร์ไม่ว่าผลลัพธ์ของการเชื่อมต่อฐานข้อมูลจะเป็นอย่างไร
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      console.log(`AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
-      console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
-      console.log(`Result Tracking System: READY`);
-      console.log(`IQ Option Integration: READY`);
-      console.log(`Available API endpoints:`);
-      console.log(`  - GET /api/test/full-system`);
-      console.log(`  - GET /api/tracking/stats`);
-      console.log(`  - GET /api/iq-option/test`);
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🖼️  AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
+      console.log(`🔗 Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
+      console.log(`📊 Result Tracking System: READY`);
+      console.log(`🔌 IQ Option Integration: READY`);
+      console.log(`🎁 Referral System: READY`);
+      console.log(`📱 LIFF Apps: READY`);
+      console.log(`\n📋 Available endpoints:`);
+      console.log(`   📊 System Status:     GET  /api/status`);
+      console.log(`   🧪 Full System Test:  GET  /api/test/full-system`);
+      console.log(`   📈 Tracking Stats:    GET  /api/tracking/stats`);
+      console.log(`   🔌 IQ Option Test:    GET  /api/iq-option/test`);
+      console.log(`   🎁 Referral Report:   GET  /api/referral/system-report`);
+      console.log(`   📱 LIFF Status:       GET  /api/liff/status`);
+      console.log(`   🧪 LIFF API Test:     GET  /api/liff/test`);
+      console.log(`   🎁 Referral Share:    GET  /liff/referral-share`);
     });
   });
 
@@ -583,6 +674,7 @@ process.on('SIGINT', async () => {
     console.error('Error stopping tracking sessions:', error);
   }
   
+  console.log('✅ Server shutdown completed');
   process.exit(0);
 });
 
@@ -606,5 +698,6 @@ process.on('SIGTERM', async () => {
     console.error('Error stopping tracking sessions:', error);
   }
   
+  console.log('✅ Server shutdown completed');
   process.exit(0);
 });
