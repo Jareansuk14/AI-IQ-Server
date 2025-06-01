@@ -2115,7 +2115,7 @@ function createContinueTradeMessage() {
 // 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง (อัปเดตใหม่ - ใช้ Share Target Picker)
 function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned = 0) {
   // URL สำหรับ LIFF App (ต้องใส่ LIFF ID จริง)
-  const liffUrl = `https://liff.line.me/YOUR_LIFF_ID?referralCode=${referralCode}`;
+  const liffUrl = `https://liff.line.me/2007512451-e6aL15Y3?referralCode=${referralCode}`;
   
   return {
     type: "flex",
