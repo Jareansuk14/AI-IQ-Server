@@ -41,9 +41,10 @@ class ResultTrackingService {
 
       // 🎯 คำนวณเวลาให้ถูกต้อง - ยึดเวลาผู้ใช้เข้าเทรดเป็นหลัก
       const delayMs = this.calculateCheckDelay(entryTime);
+      const checkTimeDisplay = this.getCheckTimeDisplay(entryTime);
       
-      console.log(`🕐 Will check result at: ${this.getCheckTimeDisplay(entryTime)}`);
-      console.log(`⏳ Delay: ${Math.round(delayMs / 1000)} seconds`);
+      console.log(`🕐 Will check result at: ${checkTimeDisplay}`);
+      console.log(`⏳ Delay: ${Math.round(delayMs / 1000)} seconds (${Math.round(delayMs / 60000)} minutes)`);
 
       // ตั้งเวลาเช็คผลให้ถูกต้อง
       setTimeout(() => {
@@ -60,7 +61,7 @@ class ResultTrackingService {
     }
   }
 
-  // 🧮 คำนวณเวลาที่ต้องรอก่อนเช็คผล
+  // 🧮 คำนวณเวลาที่ต้องรอก่อนเช็คผล (แก้ไขแล้ว)
   calculateCheckDelay(entryTime) {
     try {
       const now = new Date();
@@ -78,21 +79,43 @@ class ResultTrackingService {
       const entryDateTime = new Date();
       entryDateTime.setHours(entryHour, entryMinute, 0, 0);
       
-      // ถ้าเวลาเข้าเทรดเป็นวันถัดไป (เช่น 00:30 ในวันถัดไป)
-      if (entryDateTime < now) {
+      // 🔧 แก้ไข: เพิ่ม debug และใช้ logic ที่ปลอดภัยกว่า
+      console.log(`🔍 Entry DateTime: ${entryDateTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })}`);
+      console.log(`🔍 Current DateTime: ${now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })}`);
+      
+      // ตรวจสอบว่าเวลาเข้าเทรดเป็นวันถัดไปหรือไม่ (เฉพาะกรณีข้ามวัน เช่น 23:59 -> 00:30)
+      const timeDiffMinutes = (entryDateTime - now) / (1000 * 60);
+      console.log(`⏱️ Time diff: ${Math.round(timeDiffMinutes)} minutes`);
+      
+      // ถ้าเวลาเข้าเทรดเป็นอดีต และต่างกันมากกว่า 12 ชั่วโมง = น่าจะเป็นวันถัดไป
+      if (entryDateTime < now && Math.abs(timeDiffMinutes) > 12 * 60) {
         entryDateTime.setDate(entryDateTime.getDate() + 1);
+        console.log(`📅 Adjusted to next day: ${entryDateTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
       }
       
       // คำนวณเวลาเช็คผล (entryTime + 5 นาที)
       const checkDateTime = new Date(entryDateTime.getTime() + 5 * 60 * 1000);
+      const checkTimeDisplay = checkDateTime.toLocaleTimeString('th-TH', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: 'Asia/Bangkok'
+      });
+      
+      console.log(`🎯 Check time: ${checkTimeDisplay}`);
       
       // คำนวณระยะเวลาที่ต้องรอ
       let delayMs = checkDateTime.getTime() - now.getTime();
+      const delaySeconds = Math.round(delayMs / 1000);
       
-      // ถ้าเวลาผ่านไปแล้ว ให้เช็คใน 5 วินาที
-      if (delayMs <= 0) {
-        console.log('⚠️ Entry time has passed, will check in 5 seconds');
+      console.log(`⏳ Delay: ${delaySeconds} seconds (${Math.round(delaySeconds / 60)} minutes)`);
+      
+      // ถ้าเวลาผ่านไปแล้วแต่ไม่นาน (ภายใน 10 นาที) ให้เช็คทันที
+      if (delayMs <= 0 && Math.abs(delayMs) < 10 * 60 * 1000) {
+        console.log('⚠️ Entry time has passed recently, will check in 5 seconds');
         delayMs = 5000;
+      } else if (delayMs <= 0) {
+        console.log('❌ Entry time too far in the past, using default 5 minutes');
+        delayMs = 5 * 60 * 1000;
       }
       
       return delayMs;
@@ -103,15 +126,19 @@ class ResultTrackingService {
     }
   }
 
-  // 🕐 แสดงเวลาที่จะเช็คผล
+  // 🕐 แสดงเวลาที่จะเช็คผล (แก้ไขให้สอดคล้องกับ calculateCheckDelay)
   getCheckTimeDisplay(entryTime) {
     try {
+      const now = new Date();
       const [entryHour, entryMinute] = entryTime.split(':').map(Number);
       const entryDateTime = new Date();
       entryDateTime.setHours(entryHour, entryMinute, 0, 0);
       
-      const now = new Date();
-      if (entryDateTime < now) {
+      // 🔧 ใช้ logic เดียวกันกับ calculateCheckDelay()
+      const timeDiffMinutes = (entryDateTime - now) / (1000 * 60);
+      
+      // ถ้าเวลาเข้าเทรดเป็นอดีต และต่างกันมากกว่า 12 ชั่วโมง = น่าจะเป็นวันถัดไป
+      if (entryDateTime < now && Math.abs(timeDiffMinutes) > 12 * 60) {
         entryDateTime.setDate(entryDateTime.getDate() + 1);
       }
       
@@ -123,6 +150,7 @@ class ResultTrackingService {
         timeZone: 'Asia/Bangkok'
       });
     } catch (error) {
+      console.error('❌ Error in getCheckTimeDisplay:', error);
       return 'Unknown';
     }
   }
@@ -324,32 +352,42 @@ class ResultTrackingService {
     console.log(`🛑 Force stopped tracking for user ${userId}`);
   }
 
-  // 📈 ดูสถิติการติดตาม (เพิ่มข้อมูลเวลาเช็คผล)
+  // 📈 ดูสถิติการติดตาม (แก้ไขให้แสดงเวลาที่เหลือด้วย)
   getTrackingStats() {
     return {
       activeSessions: this.trackingSessions.size,
       blockedUsers: this.blockedUsers.size,
-      sessions: Array.from(this.trackingSessions.values()).map(session => ({
-        userId: session.userId,
-        pair: session.pair,
-        prediction: session.prediction,
-        round: session.round,
-        isActive: session.isActive,
-        startedAt: session.startedAt,
-        entryTime: session.entryTime,
-        nextCheckTime: session.entryTime ? this.getCheckTimeDisplay(session.entryTime) : 'Unknown'
-      }))
+      sessions: Array.from(this.trackingSessions.values()).map(session => {
+        const nextCheckTime = this.getCheckTimeDisplay(session.entryTime);
+        const remainingDelayMs = this.calculateCheckDelay(session.entryTime);
+        const remainingMinutes = Math.max(0, Math.round(remainingDelayMs / 60000));
+        
+        return {
+          userId: session.userId,
+          pair: session.pair,
+          prediction: session.prediction,
+          round: session.round,
+          isActive: session.isActive,
+          startedAt: session.startedAt,
+          entryTime: session.entryTime,
+          nextCheckTime: nextCheckTime,
+          remainingMinutes: remainingMinutes
+        };
+      })
     };
   }
 
-  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (เหมือนเดิม)
+  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (แก้ไขแล้ว)
   async handleBlockedUserMessage(userId) {
     const session = this.trackingSessions.get(userId);
     if (session) {
       const nextCheckTime = this.getCheckTimeDisplay(session.entryTime);
+      const remainingDelayMs = this.calculateCheckDelay(session.entryTime);
+      const remainingMinutes = Math.max(0, Math.round(remainingDelayMs / 60000));
+      
       return lineService.pushMessage(userId, {
         type: 'text',
-        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n🔍 เช็คผลตอน: ${nextCheckTime}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
+        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n🔍 เช็คผลตอน: ${nextCheckTime}\n⏳ เหลือเวลา: ${remainingMinutes} นาที\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
       });
     }
   }
@@ -372,7 +410,7 @@ class ResultTrackingService {
     return false;
   }
 
-  // 🔧 Helper method สำหรับ debug (เพิ่มข้อมูลเวลา)
+  // 🔧 Helper method สำหรับ debug (เพิ่มข้อมูลเวลาโดยละเอียด)
   async debugTracking(userId) {
     try {
       console.log(`🔧 Debug tracking for user ${userId}`);
@@ -385,16 +423,24 @@ class ResultTrackingService {
 
       const nextCheckTime = this.getCheckTimeDisplay(session.entryTime);
       const delayMs = this.calculateCheckDelay(session.entryTime);
+      const delaySeconds = Math.round(delayMs / 1000);
+      const delayMinutes = Math.round(delayMs / 60000);
       
       console.log(`📊 Session data:`, JSON.stringify(session, null, 2));
       console.log(`🕐 Next check time: ${nextCheckTime}`);
-      console.log(`⏳ Delay: ${Math.round(delayMs / 1000)} seconds`);
+      console.log(`⏳ Delay: ${delaySeconds} seconds (${delayMinutes} minutes)`);
       
       return {
         session,
         nextCheckTime,
-        delaySeconds: Math.round(delayMs / 1000),
-        isBlocked: this.isUserBlocked(userId)
+        delaySeconds,
+        delayMinutes,
+        isBlocked: this.isUserBlocked(userId),
+        currentTime: new Date().toLocaleTimeString('th-TH', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          timeZone: 'Asia/Bangkok'
+        })
       };
     } catch (error) {
       console.error('Debug error:', error);
