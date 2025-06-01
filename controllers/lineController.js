@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - อัปเดตให้ใช้ Technical Analysis
+// AI-Server/controllers/lineController.js - โค้ดทั้งหมด
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -11,7 +11,9 @@ const {
   createPaymentInfoMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage
+  createContinueTradeMessage,
+  createShareTargetMessage,      // เพิ่มใหม่
+  createInviteCardMessage        // เพิ่มใหม่
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -152,16 +154,47 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
+    // 🔄 อัปเดตส่วนแชร์ใหม่ - Share Target Picker
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
-      const referralCode = await creditService.getReferralCode(userId);
-      const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
-      
-      return lineService.replyMessage(event.replyToken, {
-        type: 'text',
-        text: `🎯 รหัสแนะนำของคุณคือ: ${referralCode}\n\n🎁 แชร์ให้เพื่อนเพื่อรับ 10 เครดิต!\n\n📝 เพื่อนของคุณสามารถพิมพ์:\nรหัส:${referralCode}\nเพื่อรับเพิ่ม 5 เครดิต\n\n🔗 หรือแชร์ลิงก์นี้:\n${lineUrl}\n\n💰 ยิ่งแชร์มาก ยิ่งได้เครดิตเยอะ!`
-      });
+      try {
+        // ดึงข้อมูลผู้ใช้
+        const profile = await lineService.getUserProfile(userId);
+        const referralCode = await creditService.getReferralCode(userId);
+        const userName = profile?.displayName || 'เพื่อน';
+        
+        // สร้าง Share Target Message
+        const shareMessage = createShareTargetMessage(referralCode, userName);
+        
+        return lineService.replyMessage(event.replyToken, shareMessage);
+      } catch (error) {
+        console.error('Error creating share message:', error);
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '❌ เกิดข้อผิดพลาดในการสร้างข้อความแชร์ กรุณาลองใหม่อีกครั้ง'
+        });
+      }
     }
     
+    // 🆕 เพิ่มคำสั่งดูรหัสแนะนำเฉยๆ (ไม่แชร์)
+    if (text === 'รหัส' || text === 'code' || text === 'mycode') {
+      try {
+        const referralCode = await creditService.getReferralCode(userId);
+        const stats = await creditService.getReferralStats(userId);
+        
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `🎯 รหัสแนะนำของคุณ: ${referralCode}\n\n📊 สถิติการแนะนำ:\n• จำนวนคนที่แนะนำ: ${stats.referredCount} คน\n• เครดิตที่ได้รับ: ${stats.totalCreditsEarned} เครดิต\n\n📝 เพื่อนสามารถพิมพ์:\n"รหัส:${referralCode}" เพื่อรับ 5 เครดิตฟรี\n\n🎁 คุณจะได้รับ 10 เครดิตทุกครั้งที่มีคนใช้รหัสของคุณ\n\n📤 กด "แชร์" เพื่อส่งการ์ดเชิญให้เพื่อน`
+        });
+      } catch (error) {
+        console.error('Error getting referral info:', error);
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '❌ เกิดข้อผิดพลาดในการดึงข้อมูลรหัสแนะนำ'
+        });
+      }
+    }
+    
+    // ระบบใช้รหัสแนะนำ (เหมือนเดิม)
     if (text.startsWith('code:') || text.startsWith('รหัส:')) {
       const referralCode = text.split(':')[1].trim();
       
@@ -177,7 +210,7 @@ const handleSpecialCommand = async (event) => {
         
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `✅ ใช้รหัสแนะนำสำเร็จ!\n🎁 คุณได้รับเพิ่ม 5 เครดิต\n💎 เครดิตคงเหลือ: ${result.credits} เครดิต\n\n🎉 ขอบคุณที่ใช้รหัสแนะนำ!`
+          text: `✅ ใช้รหัสแนะนำสำเร็จ!\n🎁 คุณได้รับเพิ่ม 5 เครดิต\n💎 เครดิตคงเหลือ: ${result.credits} เครดิต\n\n🎉 ขอบคุณที่ใช้รหัสแนะนำจาก ${result.referrerName || 'เพื่อน'}!`
         });
       } catch (error) {
         return lineService.replyMessage(event.replyToken, {
@@ -197,7 +230,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// 🔥 ฟังก์ชันจัดการ Postback Events - อัปเดตใหม่
+// 🔥 ฟังก์ชันจัดการ Postback Events
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -224,7 +257,7 @@ const handlePostbackEvent = async (event) => {
           );
           
           const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-          const qrCodeURL = `${baseURL}/payment/qr/${paymentTransaction._id}`;
+          const qrCodeURL = `${baseURL}/api/payment/qr/${paymentTransaction._id}`;
           
           const paymentInfoMessage = createPaymentInfoMessage(paymentTransaction, qrCodeURL);
           
@@ -255,7 +288,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis (อัปเดตใหม่)
+      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -265,7 +298,7 @@ const handlePostbackEvent = async (event) => {
           // ส่งข้อความ "กำลังประมวลผล..." ทันที
           await lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: `🔄 กำลังวิเคราะห์ ${forexPair}...`
+            text: `🔄 กำลังวิเคราะห์ ${forexPair}...\n\n📊 ระบบกำลังวิเคราะห์ข้อมูลทางเทคนิค\n⏳ กรุณารอสักครู่`
           });
           
           // ตรวจสอบเครดิต
@@ -385,25 +418,84 @@ const handlePostbackEvent = async (event) => {
   }
 };
 
+// 🆕 ฟังก์ชันจัดการเมื่อมีคนเพิ่มเพื่อนผ่านลิงก์แชร์
+const handleFollowWithReferral = async (userId, referralCode) => {
+  try {
+    console.log(`New user ${userId} followed via referral code: ${referralCode}`);
+    
+    // ดึงข้อมูลโปรไฟล์
+    const profile = await lineService.getUserProfile(userId);
+    
+    // สร้างหรืออัปเดตผู้ใช้
+    const { user, isNewUser } = await saveOrUpdateUser(userId, profile);
+    
+    if (isNewUser && referralCode) {
+      // ถ้าเป็นผู้ใช้ใหม่และมีรหัสแนะนำ
+      try {
+        // ใช้รหัสแนะนำอัตโนมัติ
+        await creditService.applyReferralCode(userId, referralCode);
+        
+        // ส่งข้อความต้อนรับพิเศษ
+        await lineService.pushMessage(userId, {
+          type: 'text',
+          text: `🎊 ยินดีต้อนรับสู่ AI Bot!\n\n🎁 คุณได้รับเครดิตพิเศษ!\n• เครดิตเริ่มต้น: 10 เครดิต\n• โบนัสจากเพื่อน: 5 เครดิต\n💎 รวมทั้งหมด: 15 เครดิต\n\n✨ ขอบคุณที่มาจากการแนะนำของเพื่อน!\n\n📸 ส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!\n💰 หรือพิมพ์ "AI-Auto" เพื่อวิเคราะห์ Forex`
+        });
+        
+        return true;
+      } catch (error) {
+        console.error('Error applying referral code on follow:', error);
+        // ถ้าใช้รหัสไม่ได้ ก็ส่งข้อความต้อนรับปกติ
+        await sendWelcomeMessage(userId, user.referralCode);
+        return true;
+      }
+    } else {
+      // ผู้ใช้เก่าหรือไม่มีรหัสแนะนำ
+      if (isNewUser) {
+        await sendWelcomeMessage(userId, user.referralCode);
+      }
+      return true;
+    }
+  } catch (error) {
+    console.error('Error handling follow with referral:', error);
+    return false;
+  }
+};
+
 // ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน)
 const handleFollowEvent = async (event) => {
   try {
     console.log('Handling follow event:', event);
     
-    const profile = await lineService.getUserProfile(event.source.userId);
+    const userId = event.source.userId;
     
-    const { user, isNewUser } = await saveOrUpdateUser(event.source.userId, profile);
+    // ตรวจสอบว่ามี referral code จาก URL parameter หรือไม่
+    let referralCode = null;
     
-    await sendWelcomeMessage(event.source.userId, user.referralCode);
+    // หา referral code จาก source link params (ถ้ามี)
+    if (event.source.type === 'user' && event.link) {
+      const urlParams = new URLSearchParams(event.link.split('?')[1] || '');
+      referralCode = urlParams.get('ref');
+    }
     
-    return true;
+    if (referralCode) {
+      return handleFollowWithReferral(userId, referralCode);
+    } else {
+      const profile = await lineService.getUserProfile(userId);
+      const { user, isNewUser } = await saveOrUpdateUser(userId, profile);
+      
+      if (isNewUser) {
+        await sendWelcomeMessage(userId, user.referralCode);
+      }
+      
+      return true;
+    }
   } catch (error) {
     console.error('Error handling follow event:', error);
     return false;
   }
 };
 
-// ฟังก์ชันหลักสำหรับการจัดการข้อความ (ไม่เปลี่ยนแปลง)
+// ฟังก์ชันหลักสำหรับการจัดการข้อความ
 const handleEvent = async (event) => {
   console.log('Event type:', event.type);
   
@@ -427,7 +519,7 @@ const handleEvent = async (event) => {
 
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - แชร์ให้เพื่อนรับเครดิต\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
   }
 
@@ -488,4 +580,7 @@ const handleEvent = async (event) => {
   }
 };
 
-module.exports = { handleEvent };
+module.exports = { 
+  handleEvent,
+  handleFollowWithReferral  // เพิ่มเพื่อใช้ในการทดสอบ
+};
