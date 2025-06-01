@@ -11,11 +11,6 @@ class IQOptionService {
     this.dailyLimit = 800; // Free plan limit
   }
 
-  // 🇹🇭 Helper: สร้าง Date object ใน Asia/Bangkok timezone
-  getBangkokTime() {
-    return new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
-  }
-
   // 🎯 ฟังก์ชันหลักใหม่: ดูแท่งเทียนปัจจุบัน (เรียบง่าย)
   async getCurrentCandle(pair) {
     try {
@@ -59,14 +54,11 @@ class IQOptionService {
 
       console.log(`🎯 Candle color: ${color}`);
 
-      // สร้างเวลาแสดงผล (เวลาไทย)
+      // สร้างเวลาแสดงผล (UTC+7)
       const candleTime = new Date(datetime);
-      // 🇹🇭 แปลงเป็น Bangkok timezone
-      const bangkokTime = new Date(candleTime.toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
-      const displayTime = bangkokTime.toLocaleTimeString('th-TH', { 
-        hour: '2-digit', 
-        minute: '2-digit'
-      });
+      // ใช้ UTC+7 manual calculation เหมือน resultTrackingService
+      const utc7Time = new Date(candleTime.getTime() + (7 * 60 * 60 * 1000));
+      const displayTime = utc7Time.toISOString().substr(11, 5); // HH:MM format
 
       const result = {
         pair: pair,
@@ -82,7 +74,7 @@ class IQOptionService {
         color: color,
         source: "Twelve Data API",
         requestCount: this.requestCount,
-        timestamp: this.getBangkokTime().toISOString() // Bangkok timezone
+        timestamp: new Date().toISOString()
       };
 
       console.log(`✅ Current candle result:`, result);
@@ -93,7 +85,7 @@ class IQOptionService {
       return {
         error: `ไม่สามารถดึงข้อมูลแท่งเทียนได้: ${error.message}`,
         pair: pair,
-        timestamp: this.getBangkokTime().toISOString() // Bangkok timezone
+        timestamp: new Date().toISOString()
       };
     }
   }
@@ -214,7 +206,7 @@ class IQOptionService {
         actualDateTime: result.datetime,
         volume: result.volume,
         source: result.source,
-        timestamp: this.getBangkokTime().toISOString() // Bangkok timezone
+        timestamp: result.timestamp
       };
 
     } catch (error) {
@@ -370,17 +362,17 @@ class IQOptionService {
     return results;
   }
 
-  // 🕐 ตรวจสอบว่าตลาดเปิดหรือไม่ (ใช้ Bangkok timezone)
+  // 🕐 ตรวจสอบว่าตลาดเปิดหรือไม่ (เหมือนเดิม)
   isMarketOpen() {
-    const bangkokNow = this.getBangkokTime();
-    const day = bangkokNow.getDay(); // 0 = Sunday, 6 = Saturday
-    const hour = bangkokNow.getHours();
+    const now = new Date();
+    const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const hour = now.getHours();
     
     return {
       forex: day !== 0 && day !== 6,  // Forex ปิดสุดสัปดาห์
       crypto: true,                   // Crypto เปิดตลอด
       tradingHours: hour >= 9 && hour <= 17, // Trading hours 9-17
-      timestamp: bangkokNow.toISOString(),
+      timestamp: now.toISOString(),
       timezone: 'Asia/Bangkok'
     };
   }
@@ -434,7 +426,7 @@ class IQOptionService {
         basic: '$8/month - 5,000 requests/day',
         standard: '$24/month - 15,000 requests/day'
       },
-      lastChecked: this.getBangkokTime().toISOString() // Bangkok timezone
+      lastChecked: new Date().toISOString()
     };
   }
 
@@ -478,8 +470,7 @@ class IQOptionService {
         volume: parseFloat(data.volume) || 0,
         timestamp: data.datetime,
         source: 'Twelve Data',
-        requestCount: this.requestCount,
-        bangkokTime: this.getBangkokTime().toISOString() // Bangkok timezone
+        requestCount: this.requestCount
       };
 
     } catch (error) {
