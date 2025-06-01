@@ -141,10 +141,10 @@ class ResultTrackingService {
 
       this.trackingSessions.set(userId, session);
 
-      // ส่งข้อความแจ้งให้เข้าเทรด
+      // ส่งข้อความแจ้งให้เข้าเทรด (แก้ไขให้สั้นลง)
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `🚀 เข้าเทรดเลย!\n\n📊 คู่เงิน: ${pair}\n💡 สัญญาณ: ${prediction}\n⏰ เข้าเทรดตอน: ${entryTime}\n\n⏳ ระบบจะเช็คผลในอีก 5 นาที...\n🎯 รอบที่: 1/7`
+        text: `⏰ เตรียมเข้าเทรดตอน: ${entryTime}\n⏳ ระบบจะเช็คผลหลังจากจบแท่งเทียน\n🎯 รอบที่: 1/7`
       });
 
       // 🎯 คำนวณเวลาให้ถูกต้อง - ยึดเวลาผู้ใช้เข้าเทรดเป็นหลัก
