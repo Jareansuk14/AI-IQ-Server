@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# AI-Server/scripts/yahoo_candle_checker.py - แก้ไขใหม่ (รับเวลาเข้าเทรดที่เปลี่ยนทุกรอบ)
+# AI-Server/scripts/yahoo_candle_checker.py - แก้ไขให้รับเวลาเข้าเทรดใหม่ตามรอบ
 
 import sys
 import io
@@ -20,9 +20,9 @@ def main():
             }, ensure_ascii=False))
             sys.exit(1)
         
-        symbol = sys.argv[1]          # เช่น "EUR/USD"
-        entry_time_str = sys.argv[2]  # เช่น "15:15", "15:20", "15:25" (เปลี่ยนทุกรอบ)
-        round_num = int(sys.argv[3])  # จะเป็น 1 เสมอ (เพราะ Node.js ส่งเวลาใหม่มาทุกรอบ)
+        symbol = sys.argv[1]      # เช่น "EUR/USD"
+        entry_time_str = sys.argv[2]  # เช่น "15:20" (เวลาเข้าเทรดของรอบนี้)
+        round_num = int(sys.argv[3])  # เช่น 2
         
         print(f"Debug: Yahoo Finance API - Symbol: {symbol}, Entry: {entry_time_str}, Round: {round_num}", file=sys.stderr)
         
@@ -30,8 +30,8 @@ def main():
         yahoo_symbol = convert_to_yahoo_symbol(symbol)
         print(f"Debug: Yahoo symbol: {yahoo_symbol}", file=sys.stderr)
         
-        # 🔥 คำนวณเวลาแบบง่าย: เวลาเข้าเทรด + 5 นาที = เวลาปิดแท่งเทียน
-        target_timestamp = calculate_target_time_plus_5min(entry_time_str)
+        # 🔥 คำนวณเวลาปิดแท่งเทียน = เวลาเข้าเทรด + 5 นาที (ง่ายมาก)
+        target_timestamp = calculate_candle_close_time(entry_time_str)
         if target_timestamp is None:
             print(json.dumps({
                 "error": "❌ ไม่สามารถคำนวณเวลาได้"
@@ -97,44 +97,44 @@ def main():
         }, ensure_ascii=False))
         sys.exit(1)
 
-def calculate_target_time_plus_5min(entry_time_str):
-    """🔥 คำนวณเวลาแบบง่าย: เวลาเข้าเทรด + 5 นาที"""
+def calculate_candle_close_time(entry_time_str):
+    """🔥 คำนวณเวลาปิดแท่งเทียน = เวลาเข้าเทรด + 5 นาที (ง่ายมาก)"""
     try:
-        # แปลง "15:15" เป็น datetime
+        # แปลง "15:20" เป็น datetime
         hours, minutes = map(int, entry_time_str.split(':'))
         
         # คำนวณเวลาปิดแท่งเทียน = เวลาเข้าเทรด + 5 นาที
-        target_minutes = minutes + 5
-        target_hours = hours
+        close_minutes = minutes + 5
+        close_hours = hours
         
         # จัดการกรณีที่นาทีเกิน 60
-        if target_minutes >= 60:
-            target_hours += target_minutes // 60
-            target_minutes = target_minutes % 60
+        if close_minutes >= 60:
+            close_hours += close_minutes // 60
+            close_minutes = close_minutes % 60
         
         # จัดการกรณีที่ชั่วโมงเกิน 24
-        if target_hours >= 24:
-            target_hours = target_hours % 24
+        if close_hours >= 24:
+            close_hours = close_hours % 24
         
-        print(f"Debug: Entry {entry_time_str} + 5min = {target_hours:02d}:{target_minutes:02d}", file=sys.stderr)
+        print(f"Debug: Entry {entry_time_str} + 5min = {close_hours:02d}:{close_minutes:02d}", file=sys.stderr)
         
-        # สร้าง target time
+        # สร้างเวลาปิดแท่งเทียน
         now = datetime.now()
-        target_time = now.replace(hour=target_hours, minute=target_minutes, second=0, microsecond=0)
+        close_time = now.replace(hour=close_hours, minute=close_minutes, second=0, microsecond=0)
         
-        # ถ้าเวลา target ยังไม่ถึง (ในอนาคต) ให้ใช้ย้อนหลัง 1 วัน
-        if target_time > now:
-            target_time = target_time - timedelta(days=1)
-            print(f"Debug: Target in future, using yesterday: {target_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
+        # ถ้าเวลาปิดแท่งเทียนยังไม่ถึง ให้ใช้ย้อนหลัง 1 วัน
+        if close_time > now:
+            close_time = close_time - timedelta(days=1)
+            print(f"Debug: Target in future, using yesterday", file=sys.stderr)
         
         # แปลงเป็น timestamp
-        target_timestamp = int(time.mktime(target_time.timetuple()))
+        target_timestamp = int(time.mktime(close_time.timetuple()))
         
-        print(f"Debug: Target time: {target_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
+        print(f"Debug: Candle close time: {close_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
         return target_timestamp
         
     except Exception as e:
-        print(f"❌ Error calculating target time: {e}", file=sys.stderr)
+        print(f"❌ Error calculating candle close time: {e}", file=sys.stderr)
         return None
 
 def get_yahoo_candle_data(yahoo_symbol, target_timestamp):
