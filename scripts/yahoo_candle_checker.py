@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-# AI-Server/scripts/yahoo_candle_checker.py
+# AI-Server/scripts/yahoo_candle_checker.py - แก้ไขใหม่ (รับเวลาเข้าเทรดที่เปลี่ยนทุกรอบ)
+
 import sys
 import io
 import json
@@ -19,9 +20,9 @@ def main():
             }, ensure_ascii=False))
             sys.exit(1)
         
-        symbol = sys.argv[1]  # เช่น "EURUSD"
-        entry_time_str = sys.argv[2]  # เช่น "13:45"
-        round_num = int(sys.argv[3])  # เช่น 1
+        symbol = sys.argv[1]          # เช่น "EUR/USD"
+        entry_time_str = sys.argv[2]  # เช่น "15:15", "15:20", "15:25" (เปลี่ยนทุกรอบ)
+        round_num = int(sys.argv[3])  # จะเป็น 1 เสมอ (เพราะ Node.js ส่งเวลาใหม่มาทุกรอบ)
         
         print(f"Debug: Yahoo Finance API - Symbol: {symbol}, Entry: {entry_time_str}, Round: {round_num}", file=sys.stderr)
         
@@ -29,8 +30,8 @@ def main():
         yahoo_symbol = convert_to_yahoo_symbol(symbol)
         print(f"Debug: Yahoo symbol: {yahoo_symbol}", file=sys.stderr)
         
-        # คำนวณ timestamp สำหรับรอบนั้นๆ
-        target_timestamp = calculate_target_time(entry_time_str, round_num)
+        # 🔥 คำนวณเวลาแบบง่าย: เวลาเข้าเทรด + 5 นาที = เวลาปิดแท่งเทียน
+        target_timestamp = calculate_target_time_plus_5min(entry_time_str)
         if target_timestamp is None:
             print(json.dumps({
                 "error": "❌ ไม่สามารถคำนวณเวลาได้"
@@ -38,6 +39,7 @@ def main():
             sys.exit(1)
         
         print(f"Debug: Target timestamp: {target_timestamp}", file=sys.stderr)
+        print(f"Debug: Target time: {datetime.fromtimestamp(target_timestamp).strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
         
         # ดึงข้อมูลจาก Yahoo Finance
         candle_data = get_yahoo_candle_data(yahoo_symbol, target_timestamp)
@@ -95,6 +97,134 @@ def main():
         }, ensure_ascii=False))
         sys.exit(1)
 
+def calculate_target_time_plus_5min(entry_time_str):
+    """🔥 คำนวณเวลาแบบง่าย: เวลาเข้าเทรด + 5 นาที"""
+    try:
+        # แปลง "15:15" เป็น datetime
+        hours, minutes = map(int, entry_time_str.split(':'))
+        
+        # คำนวณเวลาปิดแท่งเทียน = เวลาเข้าเทรด + 5 นาที
+        target_minutes = minutes + 5
+        target_hours = hours
+        
+        # จัดการกรณีที่นาทีเกิน 60
+        if target_minutes >= 60:
+            target_hours += target_minutes // 60
+            target_minutes = target_minutes % 60
+        
+        # จัดการกรณีที่ชั่วโมงเกิน 24
+        if target_hours >= 24:
+            target_hours = target_hours % 24
+        
+        print(f"Debug: Entry {entry_time_str} + 5min = {target_hours:02d}:{target_minutes:02d}", file=sys.stderr)
+        
+        # สร้าง target time
+        now = datetime.now()
+        target_time = now.replace(hour=target_hours, minute=target_minutes, second=0, microsecond=0)
+        
+        # ถ้าเวลา target ยังไม่ถึง (ในอนาคต) ให้ใช้ย้อนหลัง 1 วัน
+        if target_time > now:
+            target_time = target_time - timedelta(days=1)
+            print(f"Debug: Target in future, using yesterday: {target_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
+        
+        # แปลงเป็น timestamp
+        target_timestamp = int(time.mktime(target_time.timetuple()))
+        
+        print(f"Debug: Target time: {target_time.strftime('%Y-%m-%d %H:%M:%S')}", file=sys.stderr)
+        return target_timestamp
+        
+    except Exception as e:
+        print(f"❌ Error calculating target time: {e}", file=sys.stderr)
+        return None
+
+def get_yahoo_candle_data(yahoo_symbol, target_timestamp):
+    """ดึงข้อมูลแท่งเทียนจาก Yahoo Finance"""
+    try:
+        # คำนวณช่วงเวลาสำหรับดึงข้อมูล (ขยายช่วงเพื่อให้แน่ใจ)
+        end_time = target_timestamp + (2 * 3600)    # +2 ชั่วโมง
+        start_time = target_timestamp - (2 * 3600)  # -2 ชั่วโมง
+        
+        # สร้าง URL สำหรับ Yahoo Finance API
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}"
+        
+        params = {
+            'period1': start_time,
+            'period2': end_time,
+            'interval': '5m',  # 5 นาที
+            'includePrePost': 'false'
+        }
+        
+        print(f"Debug: Fetching from Yahoo API: {url}", file=sys.stderr)
+        print(f"Debug: Time range: {datetime.fromtimestamp(start_time)} to {datetime.fromtimestamp(end_time)}", file=sys.stderr)
+        
+        # เรียก API
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, params=params, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Debug: Got response from Yahoo", file=sys.stderr)
+        
+        # ตรวจสอบ response structure
+        if 'chart' not in data or not data['chart']['result']:
+            print(f"Debug: Invalid response structure", file=sys.stderr)
+            return None
+        
+        result = data['chart']['result'][0]
+        
+        # ดึงข้อมูล timestamps และ prices
+        timestamps = result['timestamp']
+        indicators = result['indicators']['quote'][0]
+        
+        opens = indicators['open']
+        closes = indicators['close']
+        highs = indicators['high']
+        lows = indicators['low']
+        volumes = indicators.get('volume', [0] * len(timestamps))
+        
+        print(f"Debug: Got {len(timestamps)} data points", file=sys.stderr)
+        
+        # หาแท่งเทียนที่ใกล้เคียงกับ target_timestamp ที่สุด
+        closest_index = None
+        min_diff = float('inf')
+        
+        for i, ts in enumerate(timestamps):
+            if (ts is None or opens[i] is None or closes[i] is None or 
+                highs[i] is None or lows[i] is None):
+                continue
+                
+            diff = abs(ts - target_timestamp)
+            if diff < min_diff:
+                min_diff = diff
+                closest_index = i
+        
+        if closest_index is None:
+            print(f"Debug: No valid candle found", file=sys.stderr)
+            return None
+        
+        print(f"Debug: Found closest candle at index {closest_index}", file=sys.stderr)
+        print(f"Debug: Time difference: {min_diff} seconds ({min_diff/60:.1f} minutes)", file=sys.stderr)
+        
+        # ส่งคืนข้อมูลแท่งเทียน
+        return {
+            'timestamp': timestamps[closest_index],
+            'open': opens[closest_index],
+            'high': highs[closest_index],
+            'low': lows[closest_index],
+            'close': closes[closest_index],
+            'volume': volumes[closest_index] if volumes[closest_index] is not None else 0
+        }
+        
+    except requests.RequestException as e:
+        print(f"Debug: Network error: {str(e)}", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"Debug: Yahoo API error: {str(e)}", file=sys.stderr)
+        return None
+
 def convert_to_yahoo_symbol(symbol):
     """แปลง symbol เป็น Yahoo Finance format"""
     
@@ -150,112 +280,6 @@ def convert_to_yahoo_symbol(symbol):
     else:
         # ถ้าไม่พบ ลองใช้ตัวเดิม
         return symbol
-
-def get_yahoo_candle_data(yahoo_symbol, target_timestamp):
-    """ดึงข้อมูลแท่งเทียนจาก Yahoo Finance"""
-    try:
-        # คำนวณช่วงเวลาสำหรับดึงข้อมูล
-        # ขยายช่วงเวลาออกไป เพื่อให้แน่ใจว่าได้ข้อมูล
-        end_time = target_timestamp + (3600 * 24)  # +24 ชั่วโมง
-        start_time = target_timestamp - (3600 * 24)  # -24 ชั่วโมง
-        
-        # สร้าง URL สำหรับ Yahoo Finance API
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_symbol}"
-        
-        params = {
-            'period1': start_time,
-            'period2': end_time,
-            'interval': '5m',  # 5 นาที
-            'includePrePost': 'false'
-        }
-        
-        print(f"Debug: Fetching from Yahoo API: {url}", file=sys.stderr)
-        print(f"Debug: Params: {params}", file=sys.stderr)
-        
-        # เรียก API
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=30)
-        response.raise_for_status()
-        
-        data = response.json()
-        print(f"Debug: Got response from Yahoo", file=sys.stderr)
-        
-        # ตรวจสอบ response structure
-        if 'chart' not in data or not data['chart']['result']:
-            print(f"Debug: Invalid response structure", file=sys.stderr)
-            return None
-        
-        result = data['chart']['result'][0]
-        
-        # ดึงข้อมูล timestamps และ prices
-        timestamps = result['timestamp']
-        indicators = result['indicators']['quote'][0]
-        
-        opens = indicators['open']
-        closes = indicators['close']
-        volumes = indicators.get('volume', [0] * len(timestamps))
-        
-        print(f"Debug: Got {len(timestamps)} data points", file=sys.stderr)
-        
-        # หาแท่งเทียนที่ใกล้เคียงกับ target_timestamp ที่สุด
-        closest_index = None
-        min_diff = float('inf')
-        
-        for i, ts in enumerate(timestamps):
-            if ts is None or opens[i] is None or closes[i] is None:
-                continue
-                
-            diff = abs(ts - target_timestamp)
-            if diff < min_diff:
-                min_diff = diff
-                closest_index = i
-        
-        if closest_index is None:
-            print(f"Debug: No valid candle found", file=sys.stderr)
-            return None
-        
-        print(f"Debug: Found closest candle at index {closest_index}, diff: {min_diff} seconds", file=sys.stderr)
-        
-        # ส่งคืนข้อมูลแท่งเทียน
-        return {
-            'timestamp': timestamps[closest_index],
-            'open': opens[closest_index],
-            'close': closes[closest_index],
-            'volume': volumes[closest_index] if volumes[closest_index] is not None else 0
-        }
-        
-    except requests.RequestException as e:
-        print(f"Debug: Network error: {str(e)}", file=sys.stderr)
-        return None
-    except Exception as e:
-        print(f"Debug: Yahoo API error: {str(e)}", file=sys.stderr)
-        return None
-
-def calculate_target_time(entry_time_str, round_num):
-    """คำนวณเวลาที่ต้องเช็คแท่งเทียน"""
-    try:
-        # แปลง entry_time_str เป็น datetime
-        hours, minutes = map(int, entry_time_str.split(':'))
-        
-        now = datetime.now()
-        entry_time = now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
-        
-        # ถ้าเวลาเข้าเทรดเลยไปแล้ว ให้ใช้วันถัดไป
-        if entry_time > now:
-            entry_time = entry_time - timedelta(days=1)
-        
-        # คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
-        target_time = entry_time + timedelta(minutes=5 * round_num)
-        
-        # แปลงเป็น timestamp
-        return int(time.mktime(target_time.timetuple()))
-        
-    except Exception as e:
-        print(f"❌ Error calculating target time: {e}", file=sys.stderr)
-        return None
 
 if __name__ == "__main__":
     main()
