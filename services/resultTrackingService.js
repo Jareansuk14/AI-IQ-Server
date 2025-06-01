@@ -1,4 +1,4 @@
-//AI-Server/services/resultTrackingService.js
+// AI-Server/services/resultTrackingService.js - Simplified Version
 const lineService = require('./lineService');
 const iqOptionService = require('./iqOptionService');
 const { createContinueTradeMessage } = require('../utils/flexMessages');
@@ -9,21 +9,21 @@ class ResultTrackingService {
     this.blockedUsers = new Set(); // เก็บ users ที่ถูก block
   }
 
-  // เริ่มต้นการติดตามผล
+  // 🎯 เริ่มติดตามผล (แบบเรียบง่าย)
   async startTracking(userId, prediction, pair, entryTime) {
     try {
-      console.log(`🎯 Starting result tracking for user ${userId}`);
+      console.log(`🎯 Starting simple tracking for user ${userId}`);
       console.log(`📊 ${pair} ${prediction} at ${entryTime}`);
 
       // Block user จากการใช้คำสั่งอื่น
       this.blockedUsers.add(userId);
 
-      // สร้าง tracking session
+      // สร้าง tracking session แบบง่าย
       const session = {
         userId,
         pair,
         prediction, // CALL หรือ PUT
-        entryTime,
+        entryTime,  // เช่น "14:00"
         round: 1,
         maxRounds: 7,
         isActive: true,
@@ -33,24 +33,16 @@ class ResultTrackingService {
 
       this.trackingSessions.set(userId, session);
 
-      // ส่งข้อความแจ้งว่ากำลังติดตามผล
+      // ส่งข้อความแจ้งให้เข้าเทรด
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `🔍 กำลังติดตามผล ${pair}\n\n📊 คาดการณ์: ${prediction}\n⏰ เข้าเทรดตอน: ${entryTime}\n🎯 รอบที่: 1/7\n\n⏳ รอจนถึงเวลาปิดแท่งเทียน...`
+        text: `🚀 เข้าเทรดเลย!\n\n📊 คู่เงิน: ${pair}\n💡 สัญญาณ: ${prediction}\n⏰ เข้าเทรดตอน: ${entryTime}\n\n⏳ ระบบจะเช็คผลในอีก 5 นาที...\n🎯 รอบที่: 1/7`
       });
 
-      // คำนวณเวลาที่ต้องเช็คผล
-      const checkTime = this.calculateCheckTime(entryTime, 1);
-      const delayMs = checkTime.getTime() - Date.now();
-
-      console.log(`⏰ Will check result at: ${checkTime.toISOString()}`);
-      console.log(`🌍 Local time: ${checkTime.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}`);
-      console.log(`⏱️ Delay: ${Math.round(delayMs / 1000)} seconds`);
-
-      // ตั้ง timeout เพื่อเช็คผลครั้งแรก
+      // ตั้งเวลาเช็คผลใน 5 นาที (เรียบง่าย)
       setTimeout(() => {
         this.checkResult(userId);
-      }, delayMs);
+      }, 5 * 60 * 1000); // 5 นาที = 300,000 ms
 
       return true;
     } catch (error) {
@@ -62,40 +54,7 @@ class ResultTrackingService {
     }
   }
 
-  // คำนวณเวลาที่ต้องเช็คผล
-  calculateCheckTime(entryTimeStr, round) {
-    // entryTimeStr = "13:45"
-    const [hours, minutes] = entryTimeStr.split(':').map(Number);
-    
-    const now = new Date();
-    const entryTime = new Date();
-    entryTime.setHours(hours, minutes, 0, 0);
-    
-    // ถ้าเวลาเข้าเทรดยังไม่ถึง ให้ใช้วันถัดไป
-    if (entryTime <= now) {
-      // สำหรับรอบแรก ต้องรอให้ถึงเวลาเข้าเทรดก่อน
-      if (round === 1) {
-        entryTime.setDate(entryTime.getDate() + 1);
-      }
-    }
-    
-    // เพิ่ม 5 นาที * รอบ สำหรับเวลาปิดแท่งเทียน
-    let checkTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
-    
-    // คำนวณ delay ในการเช็ค
-    let delayMs = checkTime.getTime() - now.getTime();
-    
-    // แก้ไข timezone offset ถ้า delay มากเกิน 7 ชั่วโมง (25200000 ms)
-    if (delayMs > 7 * 60 * 60 * 1000) {
-      delayMs = delayMs - (7 * 60 * 60 * 1000); // ลบ 7 ชั่วโมง
-      checkTime = new Date(now.getTime() + delayMs);
-      console.log(`🕐 Timezone offset corrected: ${Math.round(delayMs / 1000)} seconds`);
-    }
-    
-    return checkTime;
-  }
-
-  // เช็คผลจาก IQ Option
+  // 🔍 เช็คผลแบบเรียบง่าย
   async checkResult(userId) {
     try {
       const session = this.trackingSessions.get(userId);
@@ -112,12 +71,8 @@ class ResultTrackingService {
         text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n⏳ กรุณารอสักครู่`
       });
 
-      // เรียก IQ Option API เพื่อดูแท่งเทียน
-      const candleResult = await iqOptionService.getCandleColor(
-        session.pair,
-        session.entryTime,
-        session.round
-      );
+      // 🎯 เรียก API แบบง่าย - ดูแท่งเทียนปัจจุบัน
+      const candleResult = await iqOptionService.getCurrentCandle(session.pair);
 
       console.log(`📊 Candle result:`, candleResult);
 
@@ -134,7 +89,9 @@ class ResultTrackingService {
         candleColor: candleResult.color,
         prediction: session.prediction,
         isWin,
-        time: new Date()
+        time: new Date(),
+        entryTime: session.entryTime,
+        checkTime: candleResult.time
       });
 
       if (isWin) {
@@ -161,7 +118,7 @@ class ResultTrackingService {
     }
   }
 
-  // ตรวจสอบชนะ/แพ้
+  // ✅ ตรวจสอบชนะ/แพ้ (เหมือนเดิม)
   checkWinLose(prediction, candleColor) {
     if (prediction === 'CALL' && candleColor === 'green') {
       return true; // ทำนาย CALL และแท่งเขียว = ชนะ
@@ -172,7 +129,7 @@ class ResultTrackingService {
     return false; // อื่นๆ = แพ้
   }
 
-  // จัดการเมื่อชนะ
+  // 🎉 จัดการเมื่อชนะ
   async handleWin(userId, session, candleResult) {
     try {
       console.log(`🎉 User ${userId} WON at round ${session.round}`);
@@ -181,10 +138,14 @@ class ResultTrackingService {
       session.isActive = false;
       this.blockedUsers.delete(userId);
 
+      // คำนวณเวลาเข้าเทรดจริงและเวลาเช็คผล
+      const entryTimeDisplay = session.entryTime;
+      const checkTimeDisplay = candleResult.time;
+
       // ส่งข้อความแสดงความยินดี
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `🎉 ยินดีด้วย! คุณชนะแล้ว!\n\n📊 ${session.pair} รอบที่ ${session.round}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n⏰ เวลา: ${candleResult.time}\n\n🏆 ผลการเทรด: ชนะในรอบที่ ${session.round}`
+        text: `🎉 ยินดีด้วย! คุณชนะแล้ว!\n\n📊 ${session.pair} รอบที่ ${session.round}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${entryTimeDisplay}\n🕯️ แท่งเทียนปิดตอน: ${checkTimeDisplay}\n🎨 สีแท่งเทียน: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n🏆 ผลการเทรด: ชนะในรอบที่ ${session.round}`
       });
 
       // ส่งการ์ดถามว่าจะเทรดต่อหรือไม่
@@ -201,7 +162,7 @@ class ResultTrackingService {
     }
   }
 
-  // จัดการเมื่อแพ้
+  // ❌ จัดการเมื่อแพ้
   async handleLose(userId, session, candleResult) {
     try {
       console.log(`❌ User ${userId} LOST at round ${session.round}`);
@@ -216,22 +177,25 @@ class ResultTrackingService {
       // ยังไม่ครบ 7 รอบ - ทำต่อ
       session.round++;
 
+      const entryTimeDisplay = session.entryTime;
+      const checkTimeDisplay = candleResult.time;
+
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `❌ รอบที่ ${session.round - 1}: ไม่ถูกต้อง\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ แท่งเทียนปิด: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n🔄 ทำต่อรอบที่ ${session.round}/${session.maxRounds}\n⏳ รอแท่งเทียนถัดไป...`
+        text: `❌ รอบที่ ${session.round - 1}: ไม่ถูกต้อง\n\n📊 ${session.pair}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${entryTimeDisplay}\n🕯️ แท่งเทียนปิดตอน: ${checkTimeDisplay}\n🎨 สีแท่งเทียน: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n🔄 ทำต่อรอบที่ ${session.round}/${session.maxRounds}\n⏳ ระบบจะเช็คผลในอีก 5 นาที...`
       });
 
-      // ตั้งเวลาสำหรับเช็ครอบถัดไป (อีก 5 นาที)
+      // 🎯 ตั้งเวลาสำหรับเช็ครอบถัดไป (อีก 5 นาที)
       setTimeout(() => {
         this.checkResult(userId);
-      }, 5 * 60 * 1000); // 300 วินาที
+      }, 5 * 60 * 1000); // 5 นาที
 
     } catch (error) {
       console.error('Error handling lose:', error);
     }
   }
 
-  // จัดการเมื่อแพ้ครบ 7 รอบ
+  // 💀 จัดการเมื่อแพ้ครบ 7 รอบ
   async handleMaxRoundsReached(userId, session, candleResult) {
     try {
       console.log(`💀 User ${userId} LOST all 7 rounds`);
@@ -240,9 +204,12 @@ class ResultTrackingService {
       session.isActive = false;
       this.blockedUsers.delete(userId);
 
+      const entryTimeDisplay = session.entryTime;
+      const checkTimeDisplay = candleResult.time;
+
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `💀 เสียใจด้วย แพ้ครบ 7 รอบแล้ว\n\n📊 ${session.pair}\n🎯 คาดการณ์: ${session.prediction}\n🕯️ รอบสุดท้าย: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n📈 ลองใหม่ในครั้งหน้า!\n💪 อย่าท้อแท้ การเทรดต้องมีความอดทน`
+        text: `💀 เสียใจด้วย แพ้ครบ 7 รอบแล้ว\n\n📊 ${session.pair}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${entryTimeDisplay}\n🕯️ รอบสุดท้ายปิดตอน: ${checkTimeDisplay}\n🎨 สีแท่งเทียน: ${candleResult.color === 'green' ? '🟢 เขียว' : '🔴 แดง'}\n\n📈 ลองใหม่ในครั้งหน้า!\n💪 อย่าท้อแท้ การเทรดต้องมีความอดทน`
       });
 
       // ส่งการ์ดถามว่าจะเทรดต่อหรือไม่
@@ -259,17 +226,17 @@ class ResultTrackingService {
     }
   }
 
-  // ตรวจสอบว่า user ถูก block หรือไม่
+  // 🚫 ตรวจสอบว่า user ถูก block หรือไม่ (เหมือนเดิม)
   isUserBlocked(userId) {
     return this.blockedUsers.has(userId);
   }
 
-  // ดูข้อมูล session ปัจจุบัน
+  // 📊 ดูข้อมูล session ปัจจุบัน (เหมือนเดิม)
   getSession(userId) {
     return this.trackingSessions.get(userId);
   }
 
-  // จบการติดตามแบบ force (กรณีเกิดปัญหา)
+  // 🛑 จบการติดตามแบบ force (เหมือนเดิม)
   forceStopTracking(userId) {
     const session = this.trackingSessions.get(userId);
     if (session) {
@@ -280,7 +247,7 @@ class ResultTrackingService {
     console.log(`🛑 Force stopped tracking for user ${userId}`);
   }
 
-  // ดูสถิติการติดตาม
+  // 📈 ดูสถิติการติดตาม (เหมือนเดิม)
   getTrackingStats() {
     return {
       activeSessions: this.trackingSessions.size,
@@ -291,23 +258,24 @@ class ResultTrackingService {
         prediction: session.prediction,
         round: session.round,
         isActive: session.isActive,
-        startedAt: session.startedAt
+        startedAt: session.startedAt,
+        entryTime: session.entryTime
       }))
     };
   }
 
-  // จัดการคำสั่งจาก user ระหว่างติดตาม
+  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (เหมือนเดิม)
   async handleBlockedUserMessage(userId) {
     const session = this.trackingSessions.get(userId);
     if (session) {
       return lineService.pushMessage(userId, {
         type: 'text',
-        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n🎯 คาดการณ์: ${session.prediction}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
+        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
       });
     }
   }
 
-  // ยกเลิกการติดตาม (user request)
+  // ✋ ยกเลิกการติดตาม (เหมือนเดิม)
   async cancelTracking(userId) {
     const session = this.trackingSessions.get(userId);
     if (session && session.isActive) {
@@ -317,7 +285,7 @@ class ResultTrackingService {
 
       await lineService.pushMessage(userId, {
         type: 'text',
-        text: `✅ ยกเลิกการติดตามผลแล้ว\n\n📊 ${session.pair} รอบที่ ${session.round}\n🎯 คาดการณ์: ${session.prediction}\n\n💡 คุณสามารถใช้งานคำสั่งอื่นได้แล้ว`
+        text: `✅ ยกเลิกการติดตามผลแล้ว\n\n📊 ${session.pair} รอบที่ ${session.round}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n\n💡 คุณสามารถใช้งานคำสั่งอื่นได้แล้ว`
       });
 
       return true;

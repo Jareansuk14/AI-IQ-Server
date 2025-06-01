@@ -1,4 +1,4 @@
-// AI-Server/services/iqOptionService.js - Twelve Data API Version
+// AI-Server/services/iqOptionService.js - Simplified Version
 const axios = require('axios');
 require('dotenv').config();
 
@@ -11,10 +11,10 @@ class IQOptionService {
     this.dailyLimit = 800; // Free plan limit
   }
 
-  // 🔥 ดึงสีแท่งเทียนจาก Twelve Data API
-  async getCandleColor(pair, entryTime, round) {
+  // 🎯 ฟังก์ชันหลักใหม่: ดูแท่งเทียนปัจจุบัน (เรียบง่าย)
+  async getCurrentCandle(pair) {
     try {
-      console.log(`🌐 Calling Twelve Data API for ${pair} at ${entryTime}, round ${round}`);
+      console.log(`🔍 Getting current candle for ${pair}`);
 
       // ตรวจสอบ API Key
       if (!this.apiKey) {
@@ -26,27 +26,19 @@ class IQOptionService {
         throw new Error('❌ เกินขีดจำกัดการเรียก API วันนี้ (800 requests/day)');
       }
 
-      // แปลง pair เป็นรูปแบบ Twelve Data
+      // แปลง pair เป็น Twelve Data symbol
       const twelveSymbol = this.convertToTwelveDataSymbol(pair);
       console.log(`📊 Twelve Data symbol: ${twelveSymbol}`);
 
-      // คำนวณเวลาเป้าหมาย
-      const targetDateTime = this.calculateTargetDateTime(entryTime, round);
-      if (!targetDateTime) {
-        throw new Error('ไม่สามารถคำนวณเวลาได้');
-      }
-
-      console.log(`⏰ Target datetime: ${targetDateTime.toISOString()}`);
-
-      // ดึงข้อมูลจาก Twelve Data
-      const candleData = await this.getTwelveDataCandle(twelveSymbol, targetDateTime);
+      // ดึงข้อมูลแท่งเทียนล่าสุด
+      const candleData = await this.getLatestCandle(twelveSymbol);
       
       if (!candleData) {
-        throw new Error('ไม่สามารถดึงข้อมูลจาก Twelve Data ได้');
+        throw new Error('ไม่สามารถดึงข้อมูลแท่งเทียนได้');
       }
 
       // วิเคราะห์สีแท่งเทียน
-      const { open, close, datetime, volume } = candleData;
+      const { open, close, datetime, high, low, volume } = candleData;
       
       console.log(`📊 Open: ${open}, Close: ${close}`);
 
@@ -62,8 +54,9 @@ class IQOptionService {
 
       console.log(`🎯 Candle color: ${color}`);
 
-      // สร้างเวลาแสดงผล
-      const displayTime = new Date(datetime).toLocaleTimeString('th-TH', { 
+      // สร้างเวลาแสดงผล (เวลาไทย)
+      const candleTime = new Date(datetime);
+      const displayTime = candleTime.toLocaleTimeString('th-TH', { 
         hour: '2-digit', 
         minute: '2-digit',
         timeZone: 'Asia/Bangkok'
@@ -71,58 +64,48 @@ class IQOptionService {
 
       const result = {
         pair: pair,
+        symbol: twelveSymbol,
         time: displayTime,
+        datetime: datetime,
         candleSize: "5min",
         open: parseFloat(open),
         close: parseFloat(close),
-        color: color,
-        round: round,
-        entryTime: entryTime,
-        targetDateTime: targetDateTime.toISOString(),
-        actualDateTime: datetime,
+        high: parseFloat(high),
+        low: parseFloat(low),
         volume: parseFloat(volume) || 0,
+        color: color,
         source: "Twelve Data API",
-        symbol: twelveSymbol,
         requestCount: this.requestCount,
         timestamp: new Date().toISOString()
       };
 
-      console.log(`✅ Successfully got candle data:`, result);
+      console.log(`✅ Current candle result:`, result);
       return result;
 
     } catch (error) {
-      console.error(`❌ Error in getCandleColor: ${error.message}`);
+      console.error(`❌ Error getting current candle: ${error.message}`);
       return {
         error: `ไม่สามารถดึงข้อมูลแท่งเทียนได้: ${error.message}`,
         pair: pair,
-        entryTime: entryTime,
-        round: round,
-        requestCount: this.requestCount,
         timestamp: new Date().toISOString()
       };
     }
   }
 
-  // 🌐 ดึงข้อมูลจาก Twelve Data API
-  async getTwelveDataCandle(symbol, targetDateTime) {
+  // 🌐 ดึงข้อมูลแท่งเทียนล่าสุดจาก Twelve Data
+  async getLatestCandle(twelveSymbol) {
     try {
-      // Method 1: ใช้ Time Series API เพื่อหาแท่งเทียนที่ใกล้เคียงที่สุด
-      const endDate = new Date(targetDateTime.getTime() + (3600 * 1000 * 6)); // +6 ชั่วโมง
-      const startDate = new Date(targetDateTime.getTime() - (3600 * 1000 * 6)); // -6 ชั่วโมง
-
       const url = `${this.baseURL}/time_series`;
       
       const params = {
-        symbol: symbol,
+        symbol: twelveSymbol,
         interval: '5min',
         apikey: this.apiKey,
-        start_date: startDate.toISOString().split('T')[0] + ' ' + startDate.toTimeString().split(' ')[0],
-        end_date: endDate.toISOString().split('T')[0] + ' ' + endDate.toTimeString().split(' ')[0],
-        format: 'JSON',
-        outputsize: 100 // จำกัดจำนวนข้อมูล
+        outputsize: 2, // ดึงแค่ 2 แท่งล่าสุด (ปัจจุบันและก่อนหน้า)
+        format: 'JSON'
       };
 
-      console.log(`🔗 Fetching from Twelve Data: ${url}`);
+      console.log(`🔗 Fetching latest candle: ${url}`);
       console.log(`📊 Params:`, params);
 
       const response = await axios.get(url, {
@@ -150,34 +133,16 @@ class IQOptionService {
 
       console.log(`📊 Got ${data.values.length} candles from Twelve Data`);
 
-      // หาแท่งเทียนที่ใกล้เคียงกับเวลาเป้าหมายที่สุด
-      let closestCandle = null;
-      let minDiff = Infinity;
-
-      for (const candle of data.values) {
-        const candleTime = new Date(candle.datetime);
-        const diff = Math.abs(candleTime.getTime() - targetDateTime.getTime());
-        
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestCandle = candle;
-        }
-      }
-
-      if (!closestCandle) {
-        throw new Error('ไม่พบแท่งเทียนที่ตรงกับเวลาที่ต้องการ');
-      }
-
-      const diffMinutes = Math.round(minDiff / (1000 * 60));
-      console.log(`🎯 Found closest candle, diff: ${diffMinutes} minutes`);
+      // เอาแท่งเทียนล่าสุด (index 0 คือใหม่สุด)
+      const latestCandle = data.values[0];
 
       return {
-        datetime: closestCandle.datetime,
-        open: closestCandle.open,
-        close: closestCandle.close,
-        high: closestCandle.high,
-        low: closestCandle.low,
-        volume: closestCandle.volume
+        datetime: latestCandle.datetime,
+        open: latestCandle.open,
+        close: latestCandle.close,
+        high: latestCandle.high,
+        low: latestCandle.low,
+        volume: latestCandle.volume
       };
 
     } catch (error) {
@@ -200,36 +165,55 @@ class IQOptionService {
     }
   }
 
-  // ⏰ คำนวณเวลาเป้าหมาย (แก้ไขให้ใช้กับ Twelve Data)
-  calculateTargetDateTime(entryTimeStr, round) {
+  // 🔄 ฟังก์ชันเดิม (สำหรับ backward compatibility)
+  async getCandleColor(pair, entryTime, round) {
     try {
-      const [hours, minutes] = entryTimeStr.split(':').map(Number);
+      console.log(`🔄 Legacy function called: ${pair}, ${entryTime}, round ${round}`);
+      console.log(`⚠️ Using simplified getCurrentCandle() instead`);
       
-      const now = new Date();
-      const entryTime = new Date();
-      entryTime.setHours(hours, minutes, 0, 0);
+      // ใช้ฟังก์ชันใหม่แทน
+      const result = await this.getCurrentCandle(pair);
       
-      // ถ้าเวลาเข้าเทรดเลยไปแล้ว ให้ใช้วันก่อนหน้า
-      if (entryTime > now) {
-        entryTime.setDate(entryTime.getDate() - 1);
+      if (result.error) {
+        return {
+          error: result.error,
+          pair: pair,
+          entryTime: entryTime,
+          round: round
+        };
       }
-      
-      // คำนวณเวลาปิดแท่งเทียนสำหรับรอบนั้นๆ
-      const targetTime = new Date(entryTime.getTime() + (5 * 60 * 1000 * round));
-      
-      return targetTime;
-      
+
+      // แปลงผลลัพธ์ให้เข้ากับรูปแบบเดิม
+      return {
+        pair: result.pair,
+        time: result.time,
+        candleSize: result.candleSize,
+        open: result.open,
+        close: result.close,
+        color: result.color,
+        round: round,
+        entryTime: entryTime,
+        actualDateTime: result.datetime,
+        volume: result.volume,
+        source: result.source,
+        timestamp: result.timestamp
+      };
+
     } catch (error) {
-      console.error(`❌ Error calculating target time: ${error.message}`);
-      return null;
+      console.error(`❌ Error in legacy getCandleColor: ${error.message}`);
+      return {
+        error: `ไม่สามารถดึงข้อมูลแท่งเทียนได้: ${error.message}`,
+        pair: pair,
+        entryTime: entryTime,
+        round: round
+      };
     }
   }
 
-  // 🔄 แปลงชื่อคู่เงินเป็น Twelve Data symbol
+  // 🔄 แปลงชื่อคู่เงินเป็น Twelve Data symbol (เหมือนเดิม)
   convertToTwelveDataSymbol(pair) {
-    // Twelve Data ใช้รูปแบบเดียวกับ Forex standard
     const symbolMap = {
-      // Forex pairs (Twelve Data ใช้ format เดียวกัน)
+      // Forex pairs
       'EUR/USD': 'EUR/USD',
       'EURUSD': 'EUR/USD',
       'GBP/USD': 'GBP/USD',
@@ -261,7 +245,7 @@ class IQOptionService {
       'ADA/USD': 'ADA/USD',
       'ADAUSD': 'ADA/USD',
       
-      // Commodities (Twelve Data format)
+      // Commodities
       'GOLD': 'XAU/USD',
       'XAUUSD': 'XAU/USD'
     };
@@ -269,7 +253,7 @@ class IQOptionService {
     return symbolMap[pair] || 'EUR/USD';
   }
 
-  // 🧪 ทดสอบการเชื่อมต่อ Twelve Data
+  // 🧪 ทดสอบการเชื่อมต่อ (เรียบง่าย)
   async testConnection() {
     try {
       console.log('🧪 Testing Twelve Data API connection...');
@@ -279,41 +263,32 @@ class IQOptionService {
           success: false,
           error: 'TWELVE_DATA_API_KEY ไม่ได้ตั้งค่าใน .env file',
           message: 'กรุณาเพิ่ม API Key ใน .env file',
-          method: 'Twelve Data API'
+          method: 'Twelve Data API (Simplified)'
         };
       }
 
-      // ทดสอบด้วย Quote API (ใช้ request น้อยกว่า)
-      const url = `${this.baseURL}/quote`;
-      const params = {
-        symbol: 'EUR/USD',
-        apikey: this.apiKey
-      };
-
-      const response = await axios.get(url, { params, timeout: this.timeout });
-      this.requestCount++;
-
-      const data = response.data;
-
-      if (data.status === 'error') {
+      // ทดสอบด้วยการดูแท่งเทียนปัจจุบัน
+      const testResult = await this.getCurrentCandle('EUR/USD');
+      
+      if (testResult.error) {
         return {
           success: false,
-          error: data.message,
+          error: testResult.error,
           message: 'การเชื่อมต่อ Twelve Data ล้มเหลว',
-          method: 'Twelve Data API',
+          method: 'Twelve Data API (Simplified)',
           requestCount: this.requestCount
         };
       }
 
       return {
         success: true,
-        message: 'เชื่อมต่อ Twelve Data สำเร็จ',
-        method: 'Twelve Data API',
+        message: 'เชื่อมต่อ Twelve Data สำเร็จ (Simplified Version)',
+        method: 'Twelve Data API - getCurrentCandle()',
         data: {
-          symbol: data.symbol,
-          price: data.close,
-          change: data.change,
-          percent_change: data.percent_change
+          pair: testResult.pair,
+          time: testResult.time,
+          color: testResult.color,
+          price: testResult.close
         },
         requestCount: this.requestCount,
         remainingRequests: this.dailyLimit - this.requestCount
@@ -325,21 +300,21 @@ class IQOptionService {
         success: false,
         error: error.message,
         message: 'ไม่สามารถทดสอบการเชื่อมต่อได้',
-        method: 'Twelve Data API',
+        method: 'Twelve Data API (Simplified)',
         requestCount: this.requestCount
       };
     }
   }
 
-  // 📊 ดึงข้อมูลแท่งเทียนหลายรอบ
+  // 📊 ดึงข้อมูลแท่งเทียนหลายรอบ (สำหรับ testing)
   async getMultipleCandles(pair, entryTime, rounds) {
     const results = [];
     
-    console.log(`🔍 Fetching ${rounds} candles for ${pair}`);
+    console.log(`🔍 Testing with simplified method - Getting current candle ${rounds} times`);
     
     for (let round = 1; round <= rounds; round++) {
       try {
-        console.log(`📊 Round ${round}/${rounds} - Request count: ${this.requestCount}/${this.dailyLimit}`);
+        console.log(`📊 Test ${round}/${rounds} - Request count: ${this.requestCount}/${this.dailyLimit}`);
         
         // ตรวจสอบ daily limit
         if (this.requestCount >= this.dailyLimit) {
@@ -353,12 +328,15 @@ class IQOptionService {
           break;
         }
         
-        const result = await this.getCandleColor(pair, entryTime, round);
+        // ใช้ฟังก์ชันใหม่ getCurrentCandle()
+        const result = await this.getCurrentCandle(pair);
+        result.round = round; // เพิ่ม round number
+        result.entryTime = entryTime; // เพิ่ม entry time
         results.push(result);
         
-        // รอ 1 วินาทีระหว่างการเรียก (เพื่อไม่ให้ rate limit)
+        // รอ 2 วินาทีระหว่างการเรียก
         if (round < rounds) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       } catch (error) {
         results.push({
@@ -374,7 +352,7 @@ class IQOptionService {
     return results;
   }
 
-  // 🕐 ตรวจสอบว่าตลาดเปิดหรือไม่
+  // 🕐 ตรวจสอบว่าตลาดเปิดหรือไม่ (เหมือนเดิม)
   isMarketOpen() {
     const now = new Date();
     const day = now.getDay(); // 0 = Sunday, 6 = Saturday
@@ -389,13 +367,14 @@ class IQOptionService {
     };
   }
 
-  // 📈 ดูสถิติการใช้งาน
+  // 📈 ดูสถิติการใช้งาน (อัปเดต)
   getUsageStats() {
     const remainingRequests = Math.max(0, this.dailyLimit - this.requestCount);
     const usagePercent = Math.round((this.requestCount / this.dailyLimit) * 100);
 
     return {
-      method: 'Twelve Data API',
+      method: 'Twelve Data API (Simplified)',
+      mainFunction: 'getCurrentCandle()',
       dataSource: 'Twelve Data Financial API',
       apiEndpoint: this.baseURL,
       timeout: `${this.timeout / 1000} seconds`,
@@ -416,40 +395,38 @@ class IQOptionService {
         'XAU/USD (GOLD)'
       ],
       features: [
-        '✅ Official Financial Data API',
-        '✅ High-quality real-time data',
+        '✅ Simplified Logic',
+        '✅ Current Candle Only',
+        '✅ No Time Calculation',
         '✅ 800 requests/day (Free plan)',
-        '✅ Forex + Stock + Crypto + Commodities',
-        '✅ 1-minute to 1-month intervals',
-        '✅ Technical indicators built-in',
-        '✅ Professional-grade accuracy',
+        '✅ Real-time latest candle',
+        '✅ Easy to understand',
         '✅ Rate limiting protection'
       ],
       advantages: [
-        'ข้อมูลแม่นยำกว่า Yahoo Finance',
-        'Official API มี documentation ชัดเจน',
-        'Support ทีมเป็นมืออาชีพ',
-        'Rate limiting ป้องกัน API abuse',
-        'ข้อมูล real-time ล่าช้าน้อย',
-        'รองรับ Technical Indicators'
+        'เรียบง่ายกว่าเดิม 90%',
+        'ไม่ต้องคำนวณเวลา',
+        'ดูแท่งเทียนปัจจุบันเท่านั้น',
+        'ลด complexity ลงอย่างมาก',
+        'ง่ายต่อการ debug',
+        'ใช้ API calls น้อยลง'
       ],
       pricing: {
         free: '800 requests/day',
         basic: '$8/month - 5,000 requests/day',
-        standard: '$24/month - 15,000 requests/day',
-        professional: '$49/month - 50,000 requests/day'
+        standard: '$24/month - 15,000 requests/day'
       },
       lastChecked: new Date().toISOString()
     };
   }
 
-  // 🔧 รีเซ็ต request counter (สำหรับวันใหม่)
+  // 🔧 รีเซ็ต request counter (เหมือนเดิม)
   resetDailyCounter() {
     this.requestCount = 0;
     console.log('🔄 Daily request counter reset to 0');
   }
 
-  // 💰 ตรวจสอบ quote แบบง่าย (ใช้ request น้อย)
+  // 💰 ตรวจสอบ quote แบบง่าย (เหมือนเดิม)
   async getQuote(pair) {
     try {
       if (!this.apiKey) {
@@ -492,23 +469,18 @@ class IQOptionService {
     }
   }
 
-  // 🔧 Helper method สำหรับ debug
-  async debugCandleData(pair, entryTime, round) {
+  // 🔧 Helper method สำหรับ debug (อัปเดต)
+  async debugCurrentCandle(pair) {
     try {
-      console.log(`🔧 Debug mode - Twelve Data API`);
+      console.log(`🔧 Debug mode - Simplified getCurrentCandle()`);
       console.log(`📊 Pair: ${pair}`);
-      console.log(`⏰ Entry Time: ${entryTime}`);
-      console.log(`🎯 Round: ${round}`);
       console.log(`🔑 API Key: ${this.apiKey ? 'Configured' : 'Not configured'}`);
       console.log(`📈 Request Count: ${this.requestCount}/${this.dailyLimit}`);
 
       const twelveSymbol = this.convertToTwelveDataSymbol(pair);
-      const targetDateTime = this.calculateTargetDateTime(entryTime, round);
-
       console.log(`🌐 Twelve Data Symbol: ${twelveSymbol}`);
-      console.log(`⏰ Target DateTime: ${targetDateTime?.toISOString()}`);
 
-      const result = await this.getCandleColor(pair, entryTime, round);
+      const result = await this.getCurrentCandle(pair);
       
       console.log(`📊 Final Result:`, JSON.stringify(result, null, 2));
       
