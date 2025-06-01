@@ -1,4 +1,4 @@
-//AI-Server/services/creditService.js
+//AI-Server/services/creditService.js - โค้ดทั้งหมดพร้อม Referral System
 const User = require('../models/user');
 const CreditTransaction = require('../models/creditTransaction');
 const lineService = require('./lineService');
@@ -51,7 +51,7 @@ class CreditService {
 
   // === ฟังก์ชันใหม่สำหรับแอดมิน ===
 
-// เพิ่มเครดิตโดยแอดมิน (รองรับการหักเครดิตด้วย)
+  // เพิ่มเครดิตโดยแอดมิน (รองรับการหักเครดิตด้วย)
   async addCreditByAdmin(userId, amount, reason, adminId) {
     try {
       console.log(`Admin ${adminId} ${amount > 0 ? 'adding' : 'subtracting'} ${Math.abs(amount)} credits to user ${userId}`);
@@ -265,7 +265,7 @@ class CreditService {
     }
   }
 
-  // === ฟังก์ชันเดิมที่มีอยู่แล้ว ===
+  // === ฟังก์ชันเดิมสำหรับ Referral System ===
 
   // ใช้รหัสแนะนำ
   async applyReferralCode(userId, referralCode) {
@@ -349,6 +349,455 @@ class CreditService {
       return user.referralCode;
     } catch (error) {
       console.error('Error getting referral code:', error);
+      throw error;
+    }
+  }
+
+  // === ฟังก์ชันใหม่สำหรับ Referral System Cards ===
+
+  // ดึงสถิติการแนะนำแบบสรุป (สำหรับการ์ดแชร์)
+  async getReferralSummary(userId) {
+    try {
+      const user = await User.findOne({ lineUserId: userId });
+      if (!user) {
+        throw new Error('ไม่พบผู้ใช้');
+      }
+
+      // นับจำนวนคนที่แนะนำ
+      const totalReferred = await User.countDocuments({ 
+        referredBy: user.referralCode 
+      });
+
+      // คำนวณเครดิตที่ได้จากการแนะนำ
+      const earnedFromReferrals = await CreditTransaction.aggregate([
+        { 
+          $match: { 
+            user: user._id,
+            type: 'referral'
+          }
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } }}
+      ]);
+      const totalEarned = earnedFromReferrals[0]?.total || 0;
+
+      return {
+        referralCode: user.referralCode,
+        totalReferred,
+        totalEarned
+      };
+    } catch (error) {
+      console.error('Error getting referral summary:', error);
+      throw error;
+    }
+  }
+
+  // ดึงสถิติการแนะนำแบบละเอียด (สำหรับการ์ดสถิติ)
+  async getReferralDetailedStats(userId) {
+    try {
+      const user = await User.findOne({ lineUserId: userId });
+      if (!user) {
+        throw new Error('ไม่พบผู้ใช้');
+      }
+
+      const referralCode = user.referralCode;
+
+      // สถิติพื้นฐาน
+      const totalReferred = await User.countDocuments({ 
+        referredBy: referralCode 
+      });
+
+      const earnedFromReferrals = await CreditTransaction.aggregate([
+        { 
+          $match: { 
+            user: user._id,
+            type: 'referral'
+          }
+        },
+        { $group: { _id: null, total: { $sum: "$amount" } }}
+      ]);
+      const totalEarned = earnedFromReferrals[0]?.total || 0;
+
+      // ดึงเพื่อนที่แนะนำล่าสุด 5 คน
+      const recentReferrals = await User.find({ referredBy: referralCode })
+        .sort({ firstInteraction: -1 })
+        .limit(5)
+        .select('displayName firstInteraction lineUserId');
+
+      // สถิติรายเดือน
+      const now = new Date();
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+      const thisMonthCount = await User.countDocuments({
+        referredBy: referralCode,
+        firstInteraction: { $gte: thisMonth }
+      });
+
+      const lastMonthCount = await User.countDocuments({
+        referredBy: referralCode,
+        firstInteraction: { $gte: lastMonth, $lt: thisMonth }
+      });
+
+      // คำนวณอันดับ (จากผู้ใช้ที่แนะนำมากสุด)
+      const topReferrers = await User.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'referralCode',
+            foreignField: 'referredBy',
+            as: 'referredUsers'
+          }
+        },
+        {
+          $addFields: {
+            referralCount: { $size: '$referredUsers' }
+          }
+        },
+        {
+          $sort: { referralCount: -1 }
+        },
+        {
+          $group: {
+            _id: null,
+            users: { $push: { userId: '$lineUserId', count: '$referralCount' } }
+          }
+        }
+      ]);
+
+      let ranking = 0;
+      if (topReferrers[0]) {
+        const userIndex = topReferrers[0].users.findIndex(u => u.userId === userId);
+        ranking = userIndex >= 0 ? userIndex + 1 : 0;
+      }
+
+      // การเติบโตรายสัปดาห์ (7 วันที่ผ่านมา)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const weeklyGrowth = await User.countDocuments({
+        referredBy: referralCode,
+        firstInteraction: { $gte: sevenDaysAgo }
+      });
+
+      return {
+        referralCode,
+        totalReferred,
+        totalEarned,
+        recentReferrals: recentReferrals.map(r => ({
+          name: r.displayName || 'เพื่อน',
+          date: r.firstInteraction.toLocaleDateString('th-TH', {
+            year: '2-digit',
+            month: '2-digit', 
+            day: '2-digit'
+          }),
+          lineUserId: r.lineUserId
+        })),
+        monthlyStats: {
+          thisMonth: thisMonthCount,
+          lastMonth: lastMonthCount
+        },
+        ranking: ranking > 0 ? ranking : null,
+        weeklyGrowth,
+        // เพิ่มข้อมูลเพื่อการแสดงผล
+        growthRate: lastMonthCount > 0 ? 
+          ((thisMonthCount - lastMonthCount) / lastMonthCount * 100).toFixed(1) : 
+          (thisMonthCount > 0 ? '100' : '0')
+      };
+    } catch (error) {
+      console.error('Error getting detailed referral stats:', error);
+      throw error;
+    }
+  }
+
+  // ดึงรายการผู้ใช้ที่แนะนำมากสุด (สำหรับ admin หรือ leaderboard)
+  async getTopReferrers(limit = 10) {
+    try {
+      const topReferrers = await User.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'referralCode',
+            foreignField: 'referredBy',
+            as: 'referredUsers'
+          }
+        },
+        {
+          $addFields: {
+            referralCount: { $size: '$referredUsers' }
+          }
+        },
+        {
+          $match: {
+            referralCount: { $gt: 0 }
+          }
+        },
+        {
+          $sort: { referralCount: -1 }
+        },
+        {
+          $limit: limit
+        },
+        {
+          $project: {
+            lineUserId: 1,
+            displayName: 1,
+            referralCode: 1,
+            referralCount: 1,
+            credits: 1,
+            firstInteraction: 1
+          }
+        }
+      ]);
+
+      return topReferrers;
+    } catch (error) {
+      console.error('Error getting top referrers:', error);
+      throw error;
+    }
+  }
+
+  // ตรวจสอบความถูกต้องของรหัสแนะนำ (ก่อนใช้)
+  async validateReferralCode(userId, referralCode) {
+    try {
+      const user = await User.findOne({ lineUserId: userId });
+      if (!user) {
+        return { valid: false, reason: 'ไม่พบผู้ใช้' };
+      }
+
+      // ตรวจสอบว่าเคยใช้รหัสแล้วหรือไม่
+      if (user.referredBy) {
+        return { valid: false, reason: 'คุณเคยใช้รหัสแนะนำแล้ว' };
+      }
+
+      // ตรวจสอบว่าเป็นรหัสของตัวเองหรือไม่
+      if (user.referralCode === referralCode.toUpperCase()) {
+        return { valid: false, reason: 'ไม่สามารถใช้รหัสแนะนำของตัวเองได้' };
+      }
+
+      // ตรวจสอบว่ารหัสมีอยู่จริงหรือไม่
+      const referrer = await User.findOne({ referralCode: referralCode.toUpperCase() });
+      if (!referrer) {
+        return { valid: false, reason: 'รหัสแนะนำไม่ถูกต้องหรือไม่มีอยู่' };
+      }
+
+      return { 
+        valid: true, 
+        referrer: {
+          lineUserId: referrer.lineUserId,
+          displayName: referrer.displayName,
+          referralCode: referrer.referralCode
+        }
+      };
+    } catch (error) {
+      console.error('Error validating referral code:', error);
+      return { valid: false, reason: 'เกิดข้อผิดพลาดในการตรวจสอบรหัส' };
+    }
+  }
+
+  // สร้างรายงานระบบแนะนำ (สำหรับ admin)
+  async getReferralSystemReport() {
+    try {
+      // สถิติทั้งหมด
+      const totalUsers = await User.countDocuments();
+      const usersWithReferrals = await User.countDocuments({ referredBy: { $exists: true, $ne: null } });
+      const activeReferrers = await User.aggregate([
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'referralCode',
+            foreignField: 'referredBy',
+            as: 'referredUsers'
+          }
+        },
+        {
+          $match: {
+            'referredUsers.0': { $exists: true }
+          }
+        },
+        {
+          $count: 'count'
+        }
+      ]);
+
+      // เครดิตที่แจกจากระบบแนะนำ
+      const totalCreditsFromReferrals = await CreditTransaction.aggregate([
+        {
+          $match: {
+            type: { $in: ['referral', 'referred'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+
+      // การเติบโตรายเดือน
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const monthlyGrowth = await User.aggregate([
+        {
+          $match: {
+            referredBy: { $exists: true, $ne: null },
+            firstInteraction: { $gte: sixMonthsAgo }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$firstInteraction' },
+              month: { $month: '$firstInteraction' }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { '_id.year': 1, '_id.month': 1 }
+        }
+      ]);
+
+      return {
+        overview: {
+          totalUsers,
+          usersWithReferrals,
+          activeReferrers: activeReferrers[0]?.count || 0,
+          referralRate: totalUsers > 0 ? (usersWithReferrals / totalUsers * 100).toFixed(2) : 0
+        },
+        credits: {
+          totalDistributed: totalCreditsFromReferrals[0]?.total || 0,
+          averagePerUser: usersWithReferrals > 0 ? 
+            ((totalCreditsFromReferrals[0]?.total || 0) / usersWithReferrals).toFixed(2) : 0
+        },
+        growth: monthlyGrowth.map(m => ({
+          month: `${m._id.year}-${String(m._id.month).padStart(2, '0')}`,
+          count: m.count
+        })),
+        topReferrers: await this.getTopReferrers(5)
+      };
+    } catch (error) {
+      console.error('Error generating referral system report:', error);
+      throw error;
+    }
+  }
+
+  // === ฟังก์ชันเพิ่มเติมสำหรับ Analytics ===
+
+  // ดูการเติบโตของ referral รายวัน
+  async getReferralDailyGrowth(days = 30) {
+    try {
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - days);
+
+      const dailyStats = await User.aggregate([
+        {
+          $match: {
+            referredBy: { $exists: true, $ne: null },
+            firstInteraction: { $gte: daysAgo }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: '%Y-%m-%d', date: '$firstInteraction' } }
+            },
+            newReferrals: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { '_id.date': 1 }
+        }
+      ]);
+
+      return dailyStats.map(stat => ({
+        date: stat._id.date,
+        count: stat.newReferrals
+      }));
+    } catch (error) {
+      console.error('Error getting referral daily growth:', error);
+      throw error;
+    }
+  }
+
+  // ดูผู้ใช้ที่ยังไม่เคยใช้รหัสแนะนำ (potential targets)
+  async getUsersWithoutReferrals(limit = 50) {
+    try {
+      const usersWithoutReferrals = await User.find({
+        referredBy: { $exists: false },
+        firstInteraction: { $exists: true }
+      })
+      .sort({ firstInteraction: -1 })
+      .limit(limit)
+      .select('lineUserId displayName firstInteraction credits');
+
+      return usersWithoutReferrals;
+    } catch (error) {
+      console.error('Error getting users without referrals:', error);
+      throw error;
+    }
+  }
+
+  // คำนวณ conversion rate ของระบบแนะนำ
+  async getReferralConversionRate() {
+    try {
+      const totalUsers = await User.countDocuments();
+      const usersWithReferrals = await User.countDocuments({ 
+        referredBy: { $exists: true, $ne: null } 
+      });
+      
+      const conversionRate = totalUsers > 0 ? (usersWithReferrals / totalUsers * 100).toFixed(2) : 0;
+
+      // ดูการ conversion ในแต่ละเดือน
+      const monthlyConversion = await User.aggregate([
+        {
+          $group: {
+            _id: {
+              year: { $year: '$firstInteraction' },
+              month: { $month: '$firstInteraction' }
+            },
+            totalUsers: { $sum: 1 },
+            referredUsers: {
+              $sum: {
+                $cond: [{ $ne: ['$referredBy', null] }, 1, 0]
+              }
+            }
+          }
+        },
+        {
+          $addFields: {
+            conversionRate: {
+              $multiply: [
+                { $divide: ['$referredUsers', '$totalUsers'] },
+                100
+              ]
+            }
+          }
+        },
+        {
+          $sort: { '_id.year': -1, '_id.month': -1 }
+        },
+        {
+          $limit: 12
+        }
+      ]);
+
+      return {
+        overall: {
+          totalUsers,
+          usersWithReferrals,
+          conversionRate: parseFloat(conversionRate)
+        },
+        monthly: monthlyConversion.map(m => ({
+          month: `${m._id.year}-${String(m._id.month).padStart(2, '0')}`,
+          totalUsers: m.totalUsers,
+          referredUsers: m.referredUsers,
+          conversionRate: parseFloat(m.conversionRate.toFixed(2))
+        }))
+      };
+    } catch (error) {
+      console.error('Error calculating referral conversion rate:', error);
       throw error;
     }
   }

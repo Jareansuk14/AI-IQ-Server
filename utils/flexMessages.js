@@ -2111,20 +2111,15 @@ function createContinueTradeMessage() {
   };
 }
 
-// ฟังก์ชันสร้างการ์ดแชร์สำหรับเชิญเพื่อน
-function createShareReferralCard(referralCode, userName = 'เพื่อน') {
-  // สร้างข้อความสำหรับแชร์
-  const shareText = `🎁 เชิญคุณมาใช้บริการ AI วิเคราะห์รูปภาพฟรี!\n\n💎 รับ 5 เครดิตฟรี เมื่อใช้รหัสเชิญ: ${referralCode}\n\n🤖 เพียงแอดเพื่อนกับบอทและพิมพ์:\n"รหัส:${referralCode}"\n\n✨ วิเคราะห์รูปภาพด้วย AI ได้ทันที!`;
-  
-  // URL สำหรับแอดเพื่อนกับบอท  
-  const addFriendUrl = `https://line.me/R/ti/p/@033mebpp`;
+// 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง
+function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned = 0) {
+  const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
   
   return {
     type: "flex",
-    altText: `🎁 ${userName} เชิญคุณรับเครดิตฟรี! ใช้รหัส: ${referralCode}`,
+    altText: "🎁 แชร์เพื่อรับเครดิต",
     contents: {
       type: "bubble",
-      size: "giga",
       header: {
         type: "box",
         layout: "vertical",
@@ -2136,325 +2131,212 @@ function createShareReferralCard(referralCode, userName = 'เพื่อน') 
               {
                 type: "text",
                 text: "🎁",
-                size: "xxl",
+                size: "xl",
                 color: "#ffffff",
-                flex: 0,
-                gravity: "center"
+                flex: 0
               },
               {
-                type: "box",
-                layout: "vertical",
-                contents: [
-                  {
-                    type: "text",
-                    text: "เชิญเพื่อน",
-                    weight: "bold",
-                    color: "#ffffff",
-                    size: "xl"
-                  },
-                  {
-                    type: "text",
-                    text: "รับเครดิตฟรี",
-                    color: "#ffffff",
-                    size: "md",
-                    margin: "none"
-                  }
-                ],
+                type: "text",
+                text: "แชร์เพื่อรับเครดิต",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
                 flex: 4,
-                margin: "lg",
-                justifyContent: "center"
+                margin: "md"
               }
             ]
-          }
-        ],
-        backgroundColor: "#49aa19",
-        paddingAll: "20px"
-      },
-      hero: {
-        type: "box",
-        layout: "vertical",
-        contents: [
-          {
-            type: "text",
-            text: "🤖 AI วิเคราะห์รูปภาพ",
-            weight: "bold",
-            size: "xl",
-            color: "#177ddc",
-            align: "center",
-            margin: "lg"
           },
           {
             type: "text",
-            text: "✨ ฟรี! วิเคราะห์รูปภาพด้วย AI ล้ำสมัย",
+            text: "รหัสแนะนำของคุณ",
+            color: "#ffffff",
             size: "sm",
-            color: "#8c8c8c",
             align: "center",
-            wrap: true,
             margin: "md"
           }
         ],
-        backgroundColor: "#f8f9fa",
+        backgroundColor: "#722ed1",
         paddingAll: "20px"
       },
       body: {
         type: "box",
         layout: "vertical",
         contents: [
-          // รหัสเชิญ
+          // รหัสแนะนำ
           {
             type: "box",
             layout: "vertical",
             contents: [
               {
                 type: "text",
-                text: "🎯 รหัสเชิญของคุณ",
+                text: referralCode,
                 weight: "bold",
-                color: "#177ddc",
-                size: "lg",
-                align: "center"
+                size: "xxl",
+                color: "#722ed1",
+                align: "center",
+                decoration: "none"
               },
               {
-                type: "box",
-                layout: "vertical",
-                contents: [
-                  {
-                    type: "text",
-                    text: referralCode,
-                    weight: "bold",
-                    size: "xxl",
-                    color: "#49aa19",
-                    align: "center",
-                    letterSpacing: "0.1em"
-                  }
-                ],
-                backgroundColor: "#f0f8f0",
-                cornerRadius: "10px",
-                paddingAll: "15px",
-                margin: "md",
-                borderWidth: "2px",
-                borderColor: "#49aa19"
+                type: "text",
+                text: "คัดลอกแล้วแชร์ให้เพื่อน",
+                size: "xs",
+                color: "#8c8c8c",
+                align: "center",
+                margin: "sm"
               }
             ],
-            margin: "lg"
+            spacing: "sm",
+            margin: "lg",
+            action: {
+              type: "clipboard",
+              clipboardText: referralCode
+            }
           },
-          
           {
             type: "separator",
             margin: "xl",
-            color: "#e8e8e8"
+            color: "#303030"
           },
-          
-          // ขั้นตอนการใช้งาน
+          // สถิติ
           {
             type: "box",
             layout: "vertical",
             contents: [
               {
-                type: "text",
-                text: "📋 วิธีรับเครดิตฟรี",
-                weight: "bold",
-                color: "#177ddc",
-                size: "md",
-                margin: "lg"
-              },
-              {
                 type: "box",
-                layout: "vertical",
-                contents: [
-                  {
-                    type: "box",
-                    layout: "horizontal",
-                    contents: [
-                      {
-                        type: "text",
-                        text: "1.",
-                        size: "sm",
-                        color: "#49aa19",
-                        weight: "bold",
-                        flex: 0
-                      },
-                      {
-                        type: "text",
-                        text: "แอดเพื่อนกับบอท AI",
-                        size: "sm",
-                        color: "#333333",
-                        flex: 4,
-                        margin: "sm"
-                      }
-                    ],
-                    margin: "sm"
-                  },
-                  {
-                    type: "box",
-                    layout: "horizontal",
-                    contents: [
-                      {
-                        type: "text",
-                        text: "2.",
-                        size: "sm",
-                        color: "#49aa19",
-                        weight: "bold",
-                        flex: 0
-                      },
-                      {
-                        type: "text",
-                        text: `พิมพ์: รหัส:${referralCode}`,
-                        size: "sm",
-                        color: "#333333",
-                        flex: 4,
-                        margin: "sm",
-                        weight: "bold"
-                      }
-                    ],
-                    margin: "sm"
-                  },
-                  {
-                    type: "box",
-                    layout: "horizontal",
-                    contents: [
-                      {
-                        type: "text",
-                        text: "3.",
-                        size: "sm",
-                        color: "#49aa19",
-                        weight: "bold",
-                        flex: 0
-                      },
-                      {
-                        type: "text",
-                        text: "รับ 5 เครดิตฟรี ทันที!",
-                        size: "sm",
-                        color: "#333333",
-                        flex: 4,
-                        margin: "sm"
-                      }
-                    ],
-                    margin: "sm"
-                  }
-                ],
-                margin: "md"
-              }
-            ]
-          },
-          
-          {
-            type: "separator",
-            margin: "xl",
-            color: "#e8e8e8"
-          },
-          
-          // ข้อมูลรางวัล
-          {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "text",
-                text: "🎁 รางวัลสำหรับคุณ",
-                weight: "bold",
-                color: "#d89614",
-                size: "md",
-                margin: "lg"
-              },
-              {
-                type: "box",
-                layout: "horizontal",
+                layout: "baseline",
                 contents: [
                   {
                     type: "text",
                     text: "👥",
-                    size: "lg",
+                    size: "sm",
                     flex: 0
                   },
                   {
                     type: "text",
-                    text: "เพื่อนได้ 5 เครดิต",
+                    text: "เพื่อนที่แนะนำ:",
+                    color: "#8c8c8c",
                     size: "sm",
-                    color: "#333333",
                     flex: 3,
                     margin: "sm"
                   },
                   {
                     type: "text",
-                    text: "คุณได้ 10 เครดิต",
-                    size: "sm",
-                    color: "#d89614",
+                    text: `${totalReferred} คน`,
                     weight: "bold",
-                    flex: 4
+                    color: "#ffffff",
+                    size: "sm",
+                    flex: 2,
+                    align: "end"
+                  }
+                ]
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "💰",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เครดิตที่ได้:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 3,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${totalEarned} เครดิต`,
+                    weight: "bold",
+                    color: "#49aa19",
+                    size: "sm",
+                    flex: 2,
+                    align: "end"
                   }
                 ],
-                margin: "sm"
+                margin: "md"
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // คำแนะนำ
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🎯 วิธีการแชร์:",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
               },
               {
                 type: "text",
-                text: "💰 ยิ่งแชร์มาก ยิ่งได้เครดิตเยอะ!",
-                size: "xs",
+                text: "• คัดลอกรหัสด้านบนแล้วส่งให้เพื่อน\n• หรือกดปุ่ม \"แชร์ลิงก์\" ด้านล่าง\n• เพื่อนพิมพ์ \"รหัส:" + referralCode + "\"\n• คุณได้ 10 เครดิต เพื่อนได้ 5 เครดิต",
                 color: "#8c8c8c",
-                align: "center",
-                margin: "md",
-                style: "italic"
+                size: "xs",
+                wrap: true,
+                margin: "sm"
               }
-            ]
+            ],
+            margin: "lg"
           }
         ],
         spacing: "sm",
         paddingAll: "20px",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#1f1f1f"
       },
       footer: {
         type: "box",
         layout: "vertical",
         contents: [
-          // ปุ่มแชร์การ์ดนี้
           {
             type: "button",
             style: "primary",
             action: {
-              type: "share",
-              text: shareText
+              type: "uri",
+              label: "📤 แชร์ลิงก์ LINE",
+              uri: lineUrl
             },
-            color: "#49aa19",
-            height: "md",
-            gravity: "center"
+            color: "#722ed1",
+            height: "md"
           },
-          
-          // ปุ่มแอดเพื่อนกับบอท (สำหรับคนที่รับการ์ด)
           {
             type: "button",
             style: "secondary",
             action: {
-              type: "uri",
-              label: "🤖 แอดเพื่อนกับบอท",
-              uri: addFriendUrl
+              type: "postback",
+              label: "📊 ดูสถิติการแนะนำ",
+              data: "action=view_referral_stats"
             },
             height: "sm",
             margin: "sm"
-          },
-          
-          // ข้อความเพิ่มเติม
-          {
-            type: "text",
-            text: "หรือคัดลอกรหัส และแอดเพื่อนแล้วส่งรหัสใน Chat",
-            size: "xs",
-            color: "#8c8c8c",
-            align: "center",
-            wrap: true,
-            margin: "md"
           }
         ],
         spacing: "sm",
         paddingAll: "20px",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#1f1f1f"
       }
     }
   };
 }
 
-// ฟังก์ชันสร้างการ์ดต้อนรับสำหรับผู้ใช้ใหม่
-function createWelcomeCard(referralCode, userName = 'คุณ') {
+// 🔧 การ์ดกรอกรหัสแนะนำ
+function createReferralInputMessage() {
   return {
     type: "flex",
-    altText: `🎊 ยินดีต้อนรับ ${userName} สู่บริการ AI!`,
+    altText: "💎 ใช้รหัสแนะนำ",
     contents: {
       type: "bubble",
       header: {
@@ -2463,27 +2345,19 @@ function createWelcomeCard(referralCode, userName = 'คุณ') {
         contents: [
           {
             type: "text",
-            text: "🎊",
+            text: "💎",
             size: "xxl",
             align: "center",
             color: "#ffffff"
           },
           {
             type: "text",
-            text: `ยินดีต้อนรับ ${userName}!`,
+            text: "ใช้รหัสแนะนำ",
             weight: "bold",
             color: "#ffffff",
             size: "xl",
             align: "center",
-            margin: "md",
-            wrap: true
-          },
-          {
-            type: "text",
-            text: "สู่บริการ AI วิเคราะห์รูปภาพ",
-            color: "#ffffff",
-            size: "md",
-            align: "center"
+            margin: "md"
           }
         ],
         backgroundColor: "#177ddc",
@@ -2493,59 +2367,57 @@ function createWelcomeCard(referralCode, userName = 'คุณ') {
         type: "box",
         layout: "vertical",
         contents: [
-          // เครดิตเริ่มต้น
           {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "text",
-                text: "🎁 เครดิตเริ่มต้นฟรี",
-                weight: "bold",
-                color: "#49aa19",
-                size: "lg",
-                align: "center"
-              },
-              {
-                type: "text",
-                text: "10",
-                weight: "bold",
-                size: "xxl",
-                color: "#49aa19",
-                align: "center"
-              },
-              {
-                type: "text",
-                text: "เครดิต",
-                size: "md",
-                color: "#49aa19",
-                align: "center",
-                margin: "none"
-              }
-            ],
-            spacing: "none",
+            type: "text",
+            text: "🎁 รับเครดิตฟรี 5 เครดิต",
+            weight: "bold",
+            size: "lg",
+            color: "#177ddc",
+            align: "center",
             margin: "lg"
           },
-          
           {
             type: "separator",
             margin: "xl",
-            color: "#e8e8e8"
+            color: "#303030"
           },
-          
-          // รหัสแนะนำ
           {
             type: "box",
             layout: "vertical",
             contents: [
               {
                 type: "text",
-                text: "🎯 รหัสแนะนำของคุณ",
+                text: "📝 วิธีการใช้:",
                 weight: "bold",
-                color: "#177ddc",
-                size: "md",
-                align: "center",
-                margin: "lg"
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "text",
+                text: "1️⃣ ขอรหัสแนะนำจากเพื่อน\n2️⃣ พิมพ์ในแชทนี้ตามรูปแบบ:\n    รหัส:ABCDEF\n3️⃣ รับเครดิตฟรี 5 เครดิตทันที!",
+                color: "#8c8c8c",
+                size: "sm",
+                wrap: true,
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "💡 ตัวอย่าง:",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
               },
               {
                 type: "box",
@@ -2553,65 +2425,35 @@ function createWelcomeCard(referralCode, userName = 'คุณ') {
                 contents: [
                   {
                     type: "text",
-                    text: referralCode,
+                    text: "รหัส:A1B2C3",
                     weight: "bold",
-                    size: "xl",
-                    color: "#d89614",
+                    size: "md",
+                    color: "#49aa19",
                     align: "center",
-                    letterSpacing: "0.1em"
+                    decoration: "none",
+                    backgroundColor: "#262626",
+                    paddingAll: "12px"
                   }
                 ],
-                backgroundColor: "#fff7e6",
-                cornerRadius: "8px",
-                paddingAll: "12px",
                 margin: "sm",
-                borderWidth: "1px",
-                borderColor: "#d89614"
+                cornerRadius: "8px",
+                backgroundColor: "#262626"
               },
               {
                 type: "text",
-                text: "💰 แชร์ให้เพื่อนเพื่อรับ 10 เครดิต/คน",
+                text: "⚠️ ใช้ได้เพียงครั้งเดียวเท่านั้น",
+                color: "#d89614",
                 size: "xs",
-                color: "#8c8c8c",
                 align: "center",
                 margin: "sm"
               }
-            ]
-          },
-          
-          {
-            type: "separator",
-            margin: "xl",
-            color: "#e8e8e8"
-          },
-          
-          // วิธีใช้งาน
-          {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              {
-                type: "text",
-                text: "📸 วิธีใช้งาน",
-                weight: "bold",
-                color: "#177ddc",
-                size: "md",
-                margin: "lg"
-              },
-              {
-                type: "text",
-                text: "• ส่งรูปภาพเพื่อให้ AI วิเคราะห์\n• พิมพ์ \"เครดิต\" เพื่อดูเครดิตคงเหลือ\n• พิมพ์ \"แชร์\" เพื่อเชิญเพื่อน\n• พิมพ์ \"AI-Auto\" สำหรับวิเคราะห์ Forex",
-                color: "#333333",
-                size: "sm",
-                wrap: true,
-                margin: "md"
-              }
-            ]
+            ],
+            margin: "lg"
           }
         ],
         spacing: "sm",
         paddingAll: "20px",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#1f1f1f"
       },
       footer: {
         type: "box",
@@ -2622,30 +2464,509 @@ function createWelcomeCard(referralCode, userName = 'คุณ') {
             style: "primary",
             action: {
               type: "postback",
-              label: "🎁 แชร์เพื่อรับเครดิต",
-              data: "action=show_share_card"
+              label: "❓ ไม่มีรหัส? ขอจากเพื่อน",
+              data: "action=share_to_get_referral"
             },
-            color: "#49aa19",
+            color: "#177ddc",
             height: "md"
-          },
-          {
-            type: "text",
-            text: "ขอบคุณที่เข้าร่วมกับเรา! 🚀",
-            size: "xs",
-            color: "#8c8c8c",
-            align: "center",
-            margin: "md"
           }
         ],
         spacing: "sm",
         paddingAll: "20px",
-        backgroundColor: "#ffffff"
+        backgroundColor: "#1f1f1f"
       }
     }
   };
 }
 
-// อัปเดต module.exports เพื่อเพิ่มฟังก์ชันใหม่
+// 📊 การ์ดสถิติการแนะนำ (แบบละเอียด)
+function createReferralStatsMessage(userStats) {
+  const {
+    referralCode,
+    totalReferred = 0,
+    totalEarned = 0,
+    recentReferrals = [],
+    monthlyStats = { thisMonth: 0, lastMonth: 0 },
+    ranking = 0
+  } = userStats;
+
+  return {
+    type: "flex",
+    altText: "📊 สถิติการแนะนำ",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "text",
+                text: "📊",
+                size: "xl",
+                color: "#ffffff",
+                flex: 0
+              },
+              {
+                type: "text",
+                text: "สถิติการแนะนำ",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                flex: 4,
+                margin: "md"
+              }
+            ]
+          },
+          {
+            type: "text",
+            text: `รหัสของคุณ: ${referralCode}`,
+            color: "#ffffff",
+            size: "sm",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        backgroundColor: "#1890ff",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          // สถิติหลัก
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: `${totalReferred}`,
+                    weight: "bold",
+                    size: "xl",
+                    color: "#1890ff",
+                    align: "center"
+                  },
+                  {
+                    type: "text",
+                    text: "คนที่แนะนำ",
+                    size: "xs",
+                    color: "#8c8c8c",
+                    align: "center"
+                  }
+                ],
+                flex: 1
+              },
+              {
+                type: "separator",
+                color: "#303030"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: `${totalEarned}`,
+                    weight: "bold",
+                    size: "xl",
+                    color: "#49aa19",
+                    align: "center"
+                  },
+                  {
+                    type: "text",
+                    text: "เครดิตที่ได้",
+                    size: "xs",
+                    color: "#8c8c8c",
+                    align: "center"
+                  }
+                ],
+                flex: 1
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // สถิติรายเดือน
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "📅 สถิติรายเดือน",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "🗓️",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เดือนนี้:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${monthlyStats.thisMonth} คน`,
+                    weight: "bold",
+                    color: "#49aa19",
+                    size: "sm",
+                    flex: 2,
+                    align: "end"
+                  }
+                ],
+                margin: "md"
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "📈",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เดือนที่แล้ว:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${monthlyStats.lastMonth} คน`,
+                    weight: "bold",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    align: "end"
+                  }
+                ],
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          // อันดับ (ถ้ามี)
+          ...(ranking > 0 ? [{
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          }, {
+            type: "box",
+            layout: "baseline",
+            contents: [
+              {
+                type: "text",
+                text: "🏆",
+                size: "sm",
+                flex: 0
+              },
+              {
+                type: "text",
+                text: "อันดับการแนะนำ:",
+                color: "#8c8c8c",
+                size: "sm",
+                flex: 3,
+                margin: "sm"
+              },
+              {
+                type: "text",
+                text: `#${ranking}`,
+                weight: "bold",
+                color: "#d89614",
+                size: "md",
+                flex: 1,
+                align: "end"
+              }
+            ],
+            margin: "lg"
+          }] : []),
+          // เพื่อนล่าสุด (ถ้ามี)
+          ...(recentReferrals.length > 0 ? [{
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          }, {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "👥 เพื่อนล่าสุด",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              ...recentReferrals.slice(0, 3).map(friend => ({
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "•",
+                    size: "sm",
+                    color: "#177ddc",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: friend.name || "เพื่อน",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 3,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: friend.date,
+                    color: "#8c8c8c",
+                    size: "xs",
+                    flex: 2,
+                    align: "end"
+                  }
+                ],
+                margin: "sm"
+              }))
+            ],
+            margin: "lg"
+          }] : [])
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "postback",
+              label: "🎯 แชร์เพิ่มเติม",
+              data: "action=view_referral_share"
+            },
+            color: "#1890ff",
+            height: "md"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
+// 🎉 การ์ดแจ้งเตือนการแนะนำสำเร็จ
+function createReferralSuccessMessage(referrerData, referredData) {
+  return {
+    type: "flex",
+    altText: "🎉 แนะนำเพื่อนสำเร็จ!",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "🎉",
+            size: "xxl",
+            align: "center",
+            color: "#ffffff"
+          },
+          {
+            type: "text",
+            text: "แนะนำเพื่อนสำเร็จ!",
+            weight: "bold",
+            color: "#ffffff",
+            size: "xl",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        backgroundColor: "#49aa19",
+        paddingAll: "25px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "+10",
+                weight: "bold",
+                size: "xxl",
+                color: "#49aa19",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "เครดิต",
+                size: "lg",
+                color: "#49aa19",
+                align: "center",
+                margin: "none"
+              }
+            ],
+            spacing: "none",
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "👤",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เพื่อนใหม่:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: referredData.name || "เพื่อน",
+                    weight: "bold",
+                    color: "#ffffff",
+                    size: "sm",
+                    flex: 3
+                  }
+                ]
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "💎",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "เครดิตรวม:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${referrerData.totalCredits} เครดิต`,
+                    weight: "bold",
+                    color: "#177ddc",
+                    size: "lg",
+                    flex: 3
+                  }
+                ],
+                margin: "md"
+              },
+              {
+                type: "box",
+                layout: "baseline",
+                contents: [
+                  {
+                    type: "text",
+                    text: "👥",
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "แนะนำแล้ว:",
+                    color: "#8c8c8c",
+                    size: "sm",
+                    flex: 2,
+                    margin: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: `${referrerData.totalReferred} คน`,
+                    weight: "bold",
+                    color: "#ffffff",
+                    size: "sm",
+                    flex: 3
+                  }
+                ],
+                margin: "md"
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          {
+            type: "text",
+            text: "🌟 ยิ่งแชร์มาก ยิ่งได้เครดิตเยอะ!\nแชร์ต่อเพื่อรับเครดิตเพิ่มอีก",
+            color: "#8c8c8c",
+            size: "sm",
+            wrap: true,
+            align: "center",
+            margin: "lg"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
+// อัปเดต module.exports
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
@@ -2653,6 +2974,9 @@ module.exports = {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  createShareReferralCard,
-  createWelcomeCard  // เพิ่มบรรทัดนี้
+  // เพิ่มฟังก์ชัน Referral ใหม่
+  createReferralShareMessage,
+  createReferralInputMessage,
+  createReferralStatsMessage,
+  createReferralSuccessMessage
 };
