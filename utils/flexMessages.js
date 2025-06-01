@@ -1,4 +1,5 @@
-//AI-Server/utils/flexMessages.js
+//AI-Server/utils/flexMessages.js - Share Action Version
+
 function createCreditPackagesMessage() {
   return {
     type: "flex",
@@ -2111,7 +2112,7 @@ function createContinueTradeMessage() {
   };
 }
 
-// สร้างการ์ดเชิญสำหรับแชร์ให้เพื่อน
+// 🔥 สร้างการ์ดเชิญสำหรับแชร์ให้เพื่อน (Share Action Version)
 function createInviteCardMessage(referralCode, inviterName = 'เพื่อน') {
   const botLineId = '@033mebpp'; // LINE Bot ID ของคุณ
   const addFriendUrl = `https://line.me/R/ti/p/${botLineId}?from=invite&ref=${referralCode}`;
@@ -2364,10 +2365,8 @@ function createInviteCardMessage(referralCode, inviterName = 'เพื่อน
   };
 }
 
-// สร้างข้อความสำหรับ Share Target Picker
-function createShareTargetMessage(referralCode, userName = 'เพื่อน') {
-  const inviteCard = createInviteCardMessage(referralCode, userName);
-  
+// 🔥 สร้างข้อความสำหรับ Share Action (ใหม่)
+function createShareActionMessage(referralCode, userName = 'เพื่อน') {
   return {
     type: "flex",
     altText: "🎁 แชร์ให้เพื่อนเพื่อรับเครดิต!",
@@ -2387,7 +2386,7 @@ function createShareTargetMessage(referralCode, userName = 'เพื่อน')
           },
           {
             type: "text",
-            text: "เลือกเพื่อนที่ต้องการแชร์",
+            text: "การ์ดเชิญด้านบนจะถูกส่งให้เพื่อน",
             color: "#ffffff",
             size: "md",
             align: "center",
@@ -2460,11 +2459,10 @@ function createShareTargetMessage(referralCode, userName = 'เพื่อน')
           {
             type: "button",
             action: {
-              type: "uri",
-              label: "📤 เลือกเพื่อนที่จะแชร์",
-              uri: `https://line.me/R/share?text=${encodeURIComponent(JSON.stringify(inviteCard))}`
+              type: "share"  // 🔥 ใช้ share action แทน uri
             },
             style: "primary",
+            label: "📤 แชร์การ์ดเชิญ",
             color: "#49aa19",
             height: "md"
           }
@@ -2484,6 +2482,6 @@ module.exports = {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  createInviteCardMessage,        // เพิ่มใหม่
-  createShareTargetMessage        // เพิ่มใหม่
+  createInviteCardMessage,        // การ์ดเชิญ
+  createShareActionMessage        // ปุ่มแชร์ (Share Action)
 };

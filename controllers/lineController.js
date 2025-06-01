@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - โค้ดทั้งหมด
+// AI-Server/controllers/lineController.js - Share Action Version
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -12,8 +12,8 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  createShareTargetMessage,      // เพิ่มใหม่
-  createInviteCardMessage        // เพิ่มใหม่
+  createInviteCardMessage,        // การ์ดเชิญ
+  createShareActionMessage        // ปุ่มแชร์ (Share Action)
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -154,7 +154,7 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
-    // 🔄 อัปเดตส่วนแชร์ใหม่ - Share Target Picker
+    // 🔥 อัปเดตส่วนแชร์ใหม่ - Share Action
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
       try {
         // ดึงข้อมูลผู้ใช้
@@ -162,10 +162,15 @@ const handleSpecialCommand = async (event) => {
         const referralCode = await creditService.getReferralCode(userId);
         const userName = profile?.displayName || 'เพื่อน';
         
-        // สร้าง Share Target Message
-        const shareMessage = createShareTargetMessage(referralCode, userName);
+        // สร้างการ์ดเชิญ
+        const inviteCard = createInviteCardMessage(referralCode, userName);
         
-        return lineService.replyMessage(event.replyToken, shareMessage);
+        // สร้างปุ่มแชร์
+        const shareActionMessage = createShareActionMessage(referralCode, userName);
+        
+        // ส่งทั้งสองข้อความ
+        return lineService.replyMessage(event.replyToken, [inviteCard, shareActionMessage]);
+        
       } catch (error) {
         console.error('Error creating share message:', error);
         return lineService.replyMessage(event.replyToken, {
