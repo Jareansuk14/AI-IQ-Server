@@ -2111,7 +2111,7 @@ function createContinueTradeMessage() {
   };
 }
 
-// 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง (อัปเดตใหม่)
+// 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง
 function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned = 0) {
   const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
   
@@ -2283,7 +2283,7 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
               },
               {
                 type: "text",
-                text: "• กดปุ่ม \"📤 แชร์การ์ดนี้\" เพื่อส่งการ์ดนี้ให้เพื่อน\n• เพื่อนจะเห็นรหัสแนะนำในการ์ด\n• เพื่อนพิมพ์ \"รหัส:" + referralCode + "\" ใน Bot\n• คุณได้ 10 เครดิต เพื่อนได้ 5 เครดิต",
+                text: "• คัดลอกรหัสด้านบนแล้วส่งให้เพื่อน\n• หรือกดปุ่ม \"แชร์ลิงก์\" ด้านล่าง\n• เพื่อนพิมพ์ \"รหัส:" + referralCode + "\"\n• คุณได้ 10 เครดิต เพื่อนได้ 5 เครดิต",
                 color: "#8c8c8c",
                 size: "xs",
                 wrap: true,
@@ -2304,21 +2304,21 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
           {
             type: "button",
             style: "primary",
-            label: "📤 แชร์การ์ดนี้",
             action: {
-              type: "shareTargetPicker"
+              type: "uri",
+              label: "📤 แชร์ลิงก์ LINE",
+              uri: lineUrl
             },
             color: "#722ed1",
-            height: "md",
-            margin: "sm"
+            height: "md"
           },
           {
             type: "button",
             style: "secondary",
             action: {
-              type: "uri",
-              label: "🔗 แชร์ลิงก์ LINE",
-              uri: lineUrl
+              type: "postback",
+              label: "📊 ดูสถิติการแนะนำ",
+              data: "action=view_referral_stats"
             },
             height: "sm",
             margin: "sm"
