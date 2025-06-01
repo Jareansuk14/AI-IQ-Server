@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - เวอร์ชันสมบูรณ์พร้อมระบบแชร์ที่ทำงานได้จริง
+// AI-Server/controllers/lineController.js - อัปเดตให้ใช้ Technical Analysis
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -11,8 +11,7 @@ const {
   createPaymentInfoMessage,
   createForexPairsMessage,
   calculateNextTimeSlot,
-  createContinueTradeMessage,
-  createInvitationCard
+  createContinueTradeMessage
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -153,168 +152,14 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
-    // 🆕 ระบบแชร์ใหม่ - ทำงานได้จริง
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
-      try {
-        const profile = await lineService.getUserProfile(userId);
-        const referralCode = await creditService.getReferralCode(userId);
-        const userName = profile?.displayName || 'คุณ';
-        
-        // 🔧 สร้างข้อความเชิญที่สั้นลง (เพื่อไม่ให้ URL ยาวเกินไป)
-        const invitationText = `🎁 ${userName} เชิญใช้ AI Bot ฟรี!\n\n✨ รหัส: ${referralCode}\n🎁 รับ 5 เครดิตฟรี\n\n📱 เพิ่มเพื่อน: https://line.me/R/ti/p/@033mebpp\n📝 พิมพ์: รหัส:${referralCode}\n\n🚀 ลองเลย!`;
-        
-        // ตรวจสอบความยาวก่อน encode
-        const shareText = encodeURIComponent(invitationText);
-        const lineShareURL = `https://line.me/R/share?text=${shareText}`;
-        
-        console.log('Share URL length:', lineShareURL.length); // เพื่อ debug
-        
-        // หาก URL ยาวเกิน 1000 ตัวอักษร ให้ใช้ข้อความสั้นกว่า
-        let finalShareURL = lineShareURL;
-        if (lineShareURL.length > 1000) {
-          const shortText = `🎁 AI Bot ฟรี! รหัส: ${referralCode} https://line.me/R/ti/p/@033mebpp พิมพ์: รหัส:${referralCode}`;
-          finalShareURL = `https://line.me/R/share?text=${encodeURIComponent(shortText)}`;
-          console.log('Using short URL, length:', finalShareURL.length);
-        }
-        
-        // สร้าง Flex Message พร้อมตัวเลือกแชร์
-        const shareMessage = {
-          type: "flex",
-          altText: `แชร์รหัสเชิญ ${referralCode} ให้เพื่อน`,
-          contents: {
-            type: "bubble",
-            header: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                {
-                  type: "text",
-                  text: "🎁 แชร์ให้เพื่อน",
-                  weight: "bold",
-                  color: "#ffffff",
-                  size: "lg",
-                  align: "center"
-                },
-                {
-                  type: "text",
-                  text: "รับ 10 เครดิตต่อการแนะนำ!",
-                  color: "#ffffff",
-                  size: "sm",
-                  align: "center",
-                  margin: "sm"
-                }
-              ],
-              backgroundColor: "#4ecdc4",
-              paddingAll: "20px"
-            },
-            body: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                {
-                  type: "box",
-                  layout: "vertical",
-                  contents: [
-                    {
-                      type: "text",
-                      text: "รหัสแนะนำของคุณ",
-                      weight: "bold",
-                      size: "md",
-                      color: "#2c2c2c",
-                      align: "center"
-                    },
-                    {
-                      type: "text",
-                      text: referralCode,
-                      weight: "bold",
-                      size: "xxl",
-                      color: "#4ecdc4",
-                      align: "center",
-                      margin: "sm"
-                    }
-                  ],
-                  backgroundColor: "#f0ffff",
-                  cornerRadius: "8px",
-                  paddingAll: "16px",
-                  margin: "lg"
-                },
-                {
-                  type: "text",
-                  text: "🎯 เลือกวิธีแชร์:",
-                  weight: "bold",
-                  size: "sm",
-                  color: "#2c2c2c",
-                  margin: "lg"
-                }
-              ],
-              spacing: "sm",
-              paddingAll: "20px",
-              backgroundColor: "#ffffff"
-            },
-            footer: {
-              type: "box",
-              layout: "vertical",
-              contents: [
-                // ปุ่มแชร์หลัก - ใช้ URL ที่ปรับแล้ว
-                {
-                  type: "button",
-                  style: "primary",
-                  action: {
-                    type: "uri",
-                    label: "📤 เลือกเพื่อนใน LINE",
-                    uri: finalShareURL
-                  },
-                  color: "#4ecdc4",
-                  height: "sm"
-                },
-                // ปุ่มคัดลอกข้อความ (ปลอดภัยกว่า)
-                {
-                  type: "button",
-                  style: "secondary",
-                  action: {
-                    type: "postback",
-                    label: "📋 คัดลอกข้อความ",
-                    data: `action=copy_share_text&referral_code=${referralCode}&inviter_name=${encodeURIComponent(userName)}`
-                  },
-                  height: "sm",
-                  margin: "sm"
-                },
-                // ปุ่มการ์ดสวย
-                {
-                  type: "button",
-                  style: "secondary",
-                  action: {
-                    type: "postback",
-                    label: "🎨 การ์ดสวยๆ",
-                    data: `action=get_invitation_card&referral_code=${referralCode}&inviter_name=${encodeURIComponent(userName)}`
-                  },
-                  height: "sm",
-                  margin: "xs"
-                },
-                {
-                  type: "text",
-                  text: "💰 แนะนำสำเร็จ = 10 เครดิตฟรี",
-                  size: "xs",
-                  color: "#999999",
-                  align: "center",
-                  margin: "md"
-                }
-              ],
-              spacing: "xs",
-              paddingAll: "20px",
-              backgroundColor: "#ffffff"
-            }
-          }
-        };
-        
-        return lineService.replyMessage(event.replyToken, shareMessage);
-      } catch (error) {
-        console.error('Error creating share message:', error);
-        return lineService.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '❌ เกิดข้อผิดพลาดในการสร้างหน้าแชร์ กรุณาลองใหม่อีกครั้ง'
-        });
-      }
+      const referralCode = await creditService.getReferralCode(userId);
+      const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
+      
+      return lineService.replyMessage(event.replyToken, {
+        type: 'text',
+        text: `🎯 รหัสแนะนำของคุณคือ: ${referralCode}\n\n🎁 แชร์ให้เพื่อนเพื่อรับ 10 เครดิต!\n\n📝 เพื่อนของคุณสามารถพิมพ์:\nรหัส:${referralCode}\nเพื่อรับเพิ่ม 5 เครดิต\n\n🔗 หรือแชร์ลิงก์นี้:\n${lineUrl}\n\n💰 ยิ่งแชร์มาก ยิ่งได้เครดิตเยอะ!`
+      });
     }
     
     if (text.startsWith('code:') || text.startsWith('รหัส:')) {
@@ -352,7 +197,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// 🔥 ฟังก์ชันจัดการ Postback Events
+// 🔥 ฟังก์ชันจัดการ Postback Events - อัปเดตใหม่
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -363,7 +208,7 @@ const handlePostbackEvent = async (event) => {
     console.log('Handling postback event:', action, data);
     
     if (resultTrackingService.isUserBlocked(userId) && 
-        !['continue_trading', 'stop_trading', 'copy_share_text', 'get_invitation_card'].includes(action)) {
+        !['continue_trading', 'stop_trading'].includes(action)) {
       await resultTrackingService.handleBlockedUserMessage(userId);
       return;
     }
@@ -379,7 +224,7 @@ const handlePostbackEvent = async (event) => {
           );
           
           const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-          const qrCodeURL = `${baseURL}/api/payment/qr/${paymentTransaction._id}`;
+          const qrCodeURL = `${baseURL}/payment/qr/${paymentTransaction._id}`;
           
           const paymentInfoMessage = createPaymentInfoMessage(paymentTransaction, qrCodeURL);
           
@@ -410,7 +255,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis
+      // 🔥 การวิเคราะห์ Forex ด้วย Technical Analysis (อัปเดตใหม่)
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -498,71 +343,6 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // 🆕 ระบบแชร์ใหม่ - Postback Actions
-      case 'copy_share_text':
-        const copyReferralCode = params.get('referral_code');
-        const copyInviterName = decodeURIComponent(params.get('inviter_name') || 'เพื่อน');
-        
-        try {
-          // ข้อความเต็มสำหรับการคัดลอก (ไม่มีข้อจำกัด URL)
-          const fullShareText = `🎁 ${copyInviterName} เชิญคุณใช้บริการ AI วิเคราะห์รูปภาพฟรี!
-      
-      ✨ ใช้รหัสเชิญ: ${copyReferralCode}
-      🎁 รับเครดิตฟรี 5 เครดิต (มูลค่า 50 บาท)
-      
-      📱 เพิ่มเพื่อน AI Bot: 
-      https://line.me/R/ti/p/@033mebpp
-      
-      📝 หลังเพิ่มเพื่อนแล้ว พิมพ์: รหัส:${copyReferralCode}
-      
-      🚀 ฟีเจอร์:
-      • AI วิเคราะห์รูปภาพ
-      • วิเคราะห์ Forex Real-time  
-      • เครดิตฟรีเพียบ
-      
-      💰 แชร์ต่อรับ 10 เครดิตฟรี!`;
-          
-          return lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: `📋 คัดลอกข้อความด้านล่างแล้วส่งให้เพื่อน:\n\n─────────────────\n${fullShareText}\n─────────────────\n\n💡 วิธีส่ง:\n• คัดลอกข้อความด้านบน\n• ไปที่แชท LINE ของเพื่อน\n• วางข้อความแล้วส่ง\n• หรือส่งผ่าน Facebook, WhatsApp ก็ได้!`
-          });
-        } catch (error) {
-          console.error('Error copying share text:', error);
-          return lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '❌ เกิดข้อผิดพลาดในการสร้างข้อความแชร์'
-          });
-        }
-        break;
-
-      case 'get_invitation_card':
-        const cardReferralCode = params.get('referral_code');
-        const cardInviterName = decodeURIComponent(params.get('inviter_name') || 'เพื่อน');
-        
-        try {
-          // สร้างการ์ดเชิญ
-          const invitationCard = createInvitationCard(cardReferralCode, cardInviterName);
-          
-          return lineService.replyMessage(event.replyToken, [
-            {
-              type: 'text',
-              text: '🎨 นี่คือการ์ดเชิญสวยๆ ของคุณ!\n\n💡 วิธีแชร์การ์ด:\n\n📱 บนมือถือ:\n• กดค้างที่การ์ด\n• เลือก "ส่งต่อ" หรือ "Forward"\n• เลือกเพื่อนที่ต้องการส่งให้\n\n💻 บนคอมพิวเตอร์:\n• คลิกขวาที่การ์ด\n• เลือก "ส่งต่อ"\n• เลือกเพื่อนที่ต้องการส่งให้'
-            },
-            invitationCard,
-            {
-              type: 'text',
-              text: '🎯 เคล็ดลับ: การ์ดนี้จะถูกส่งโดยคุณเป็นคนส่ง ไม่ใช่บอท!\n\n📤 หรือใช้ปุ่ม "เลือกเพื่อนใน LINE" ด้านบนเพื่อแชร์ข้อความได้ง่ายกว่า!'
-            }
-          ]);
-        } catch (error) {
-          console.error('Error creating invitation card:', error);
-          return lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '❌ เกิดข้อผิดพลาดในการสร้างการ์ดเชิญ'
-          });
-        }
-        break;
-
       case 'continue_trading':
         try {
           const forexMessage = createForexPairsMessage();
@@ -623,7 +403,7 @@ const handleFollowEvent = async (event) => {
   }
 };
 
-// ฟังก์ชันหลักสำหรับการจัดการข้อความ
+// ฟังก์ชันหลักสำหรับการจัดการข้อความ (ไม่เปลี่ยนแปลง)
 const handleEvent = async (event) => {
   console.log('Event type:', event.type);
   
@@ -647,7 +427,7 @@ const handleEvent = async (event) => {
 
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - แชร์ให้เพื่อนรับเครดิต\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
+      text: '📸 กรุณาส่งรูปภาพเพื่อให้ฉันวิเคราะห์\n\n💡 หรือใช้คำสั่งต่างๆ เช่น:\n• "เครดิต" - ดูเครดิตคงเหลือ\n• "เติมเครดิต" - ซื้อเครดิตเพิ่ม\n• "แชร์" - ดูรหัสแนะนำเพื่อน\n• "AI-Auto" - วิเคราะห์คู่เงิน Forex'
     });
   }
 
