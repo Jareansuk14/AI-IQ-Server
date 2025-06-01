@@ -9,6 +9,16 @@ class ResultTrackingService {
     this.blockedUsers = new Set(); // เก็บ users ที่ถูก block
   }
 
+  // 🇹🇭 Helper: สร้าง Date object ใน Asia/Bangkok timezone
+  getBangkokTime() {
+    return new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+  }
+
+  // 🇹🇭 Helper: แปลง Date เป็น Bangkok time string
+  formatBangkokTime(date, options = { hour: '2-digit', minute: '2-digit' }) {
+    return date.toLocaleTimeString('th-TH', options);
+  }
+
   // 🎯 เริ่มติดตามผล (แก้ไขแล้ว - ยึดเวลาผู้ใช้เข้าเทรดเป็นหลัก)
   async startTracking(userId, prediction, pair, entryTime) {
     try {
@@ -18,7 +28,7 @@ class ResultTrackingService {
       // Block user จากการใช้คำสั่งอื่น
       this.blockedUsers.add(userId);
 
-      // สร้าง tracking session
+      // สร้าง session แบบง่าย
       const session = {
         userId,
         pair,
@@ -27,7 +37,7 @@ class ResultTrackingService {
         round: 1,
         maxRounds: 7,
         isActive: true,
-        startedAt: new Date(),
+        startedAt: this.getBangkokTime(), // Bangkok timezone
         results: []
       };
 
@@ -60,42 +70,48 @@ class ResultTrackingService {
     }
   }
 
-  // 🧮 คำนวณเวลาที่ต้องรอก่อนเช็คผล (ใช้ UTC+7 ทั้งหมด)
+  // 🧮 คำนวณเวลาที่ต้องรอก่อนเช็คผล (ใช้ Asia/Bangkok ทั้งหมด)
   calculateCheckDelay(entryTime) {
     try {
-      // ใช้ UTC+7 ทั้งหมด (Asia/Bangkok = UTC+7)
-      const now = new Date();
-      const utc7Now = new Date(now.getTime() + (7 * 60 * 60 * 1000)); // เพิ่ม 7 ชั่วโมง
+      // 🇹🇭 ใช้ Asia/Bangkok timezone ทั้งหมด
+      const bangkokNow = this.getBangkokTime();
+      const currentTime = this.formatBangkokTime(bangkokNow);
       
-      const currentTime = utc7Now.toISOString().substr(11, 5); // HH:MM format
-      
-      console.log(`📊 Current time (UTC+7): ${currentTime}`);
+      console.log(`📊 Current time (Bangkok): ${currentTime}`);
       console.log(`⏰ Entry time: ${entryTime}`);
       
-      // แปลง entryTime เป็น Date object ใน UTC+7
+      // แปลง entryTime เป็น Date object ใน Bangkok timezone
       const [entryHour, entryMinute] = entryTime.split(':').map(Number);
       
-      // สร้าง Date object สำหรับเวลาเข้าเทรดใน UTC+7
-      const entryDateTime = new Date(utc7Now);
-      entryDateTime.setUTCHours(entryHour, entryMinute, 0, 0);
+      // สร้าง entryDateTime ใน Bangkok timezone
+      const entryDateTime = new Date(bangkokNow);
+      entryDateTime.setHours(entryHour, entryMinute, 0, 0);
       
-      // ถ้าเวลาเข้าเทรดผ่านไปแล้วในวันนี้ ให้ใช้วันถัดไป
-      if (entryDateTime < utc7Now) {
-        entryDateTime.setUTCDate(entryDateTime.getUTCDate() + 1);
+      // ถ้าเวลาเข้าเทรดผ่านไปแล้วในวันนี้ ให้เลื่อนไปวันถัดไป
+      if (entryDateTime <= bangkokNow) {
+        entryDateTime.setDate(entryDateTime.getDate() + 1);
+        console.log(`📅 Entry time moved to next day: ${this.formatBangkokTime(entryDateTime, { 
+          year: 'numeric', 
+          month: '2-digit', 
+          day: '2-digit', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        })}`);
       }
       
-      // คำนวณเวลาเช็คผล (entryTime + 5 นาที) ใน UTC+7
+      // คำนวณเวลาเช็คผล (entryTime + 5 นาที) ใน Bangkok timezone
       const checkDateTime = new Date(entryDateTime.getTime() + 5 * 60 * 1000);
       
-      // คำนวณระยะเวลาที่ต้องรอ (ใช้เวลาจริงของ server)
-      let delayMs = checkDateTime.getTime() - now.getTime(); // ใช้ server time จริง
+      // คำนวณระยะเวลาที่ต้องรอ
+      let delayMs = checkDateTime.getTime() - bangkokNow.getTime();
       
-      console.log(`🕐 Check time (UTC+7): ${checkDateTime.toISOString().substr(11, 5)}`);
-      console.log(`⏳ Calculated delay: ${Math.round(delayMs / 1000)} seconds`);
+      console.log(`🕐 Entry DateTime (Bangkok): ${this.formatBangkokTime(entryDateTime)}`);
+      console.log(`🔍 Check DateTime (Bangkok): ${this.formatBangkokTime(checkDateTime)}`);
+      console.log(`⏳ Raw delay: ${delayMs} ms (${Math.round(delayMs / 1000)} seconds)`);
       
       // ถ้าเวลาผ่านไปแล้ว ให้เช็คใน 5 วินาที
       if (delayMs <= 0) {
-        console.log('⚠️ Entry time has passed, will check in 5 seconds');
+        console.log('⚠️ Check time has passed, will check in 5 seconds');
         delayMs = 5000;
       }
       
@@ -107,31 +123,28 @@ class ResultTrackingService {
     }
   }
 
-  // 🕐 แสดงเวลาที่จะเช็คผล (ใช้ UTC+7)
+  // 🕐 แสดงเวลาที่จะเช็คผล (ใช้ Asia/Bangkok ทั้งหมด)
   getCheckTimeDisplay(entryTime) {
     try {
-      // ใช้ UTC+7 ทั้งหมด
-      const now = new Date();
-      const utc7Now = new Date(now.getTime() + (7 * 60 * 60 * 1000));
+      // 🇹🇭 ใช้ Asia/Bangkok timezone ทั้งหมด
+      const bangkokNow = this.getBangkokTime();
       
       const [entryHour, entryMinute] = entryTime.split(':').map(Number);
       
-      // สร้าง Date object สำหรับเวลาเข้าเทรดใน UTC+7
-      const entryDateTime = new Date(utc7Now);
-      entryDateTime.setUTCHours(entryHour, entryMinute, 0, 0);
+      // สร้าง entryDateTime ใน Bangkok timezone
+      const entryDateTime = new Date(bangkokNow);
+      entryDateTime.setHours(entryHour, entryMinute, 0, 0);
       
-      // ถ้าเวลาเข้าเทรดผ่านไปแล้ว ให้ใช้วันถัดไป
-      if (entryDateTime < utc7Now) {
-        entryDateTime.setUTCDate(entryDateTime.getUTCDate() + 1);
+      // ถ้าเวลาเข้าเทรดผ่านไปแล้วในวันนี้ ให้เลื่อนไปวันถัดไป
+      if (entryDateTime <= bangkokNow) {
+        entryDateTime.setDate(entryDateTime.getDate() + 1);
       }
       
       // คำนวณเวลาเช็คผล (entryTime + 5 นาที)
       const checkDateTime = new Date(entryDateTime.getTime() + 5 * 60 * 1000);
       
-      // แสดงเวลาในรูปแบบ HH:MM (UTC+7)
-      return checkDateTime.toISOString().substr(11, 5);
+      return this.formatBangkokTime(checkDateTime);
     } catch (error) {
-      console.error('❌ Error getting check time:', error);
       return 'Unknown';
     }
   }
@@ -171,7 +184,7 @@ class ResultTrackingService {
         candleColor: candleResult.color,
         prediction: session.prediction,
         isWin,
-        time: new Date(),
+        time: this.getBangkokTime(), // Bangkok timezone
         entryTime: session.entryTime,
         checkTime: candleResult.time
       });
@@ -333,12 +346,11 @@ class ResultTrackingService {
     console.log(`🛑 Force stopped tracking for user ${userId}`);
   }
 
-  // 📈 ดูสถิติการติดตาม (แสดงเวลา UTC+7)
+  // 📈 ดูสถิติการติดตาม (เพิ่มข้อมูลเวลาเช็คผล)
   getTrackingStats() {
     return {
       activeSessions: this.trackingSessions.size,
       blockedUsers: this.blockedUsers.size,
-      timezone: 'UTC+7 (Asia/Bangkok)',
       sessions: Array.from(this.trackingSessions.values()).map(session => ({
         userId: session.userId,
         pair: session.pair,
@@ -347,19 +359,19 @@ class ResultTrackingService {
         isActive: session.isActive,
         startedAt: session.startedAt,
         entryTime: session.entryTime,
-        nextCheckTime: session.entryTime ? `${this.getCheckTimeDisplay(session.entryTime)} (UTC+7)` : 'Unknown'
+        nextCheckTime: session.entryTime ? this.getCheckTimeDisplay(session.entryTime) : 'Unknown'
       }))
     };
   }
 
-  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (ใช้ UTC+7)
+  // 🚫 จัดการคำสั่งจาก user ระหว่างติดตาม (เหมือนเดิม)
   async handleBlockedUserMessage(userId) {
     const session = this.trackingSessions.get(userId);
     if (session) {
       const nextCheckTime = this.getCheckTimeDisplay(session.entryTime);
       return lineService.pushMessage(userId, {
         type: 'text',
-        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n🔍 เช็คผลตอน: ${nextCheckTime} (UTC+7)\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
+        text: `🚫 คุณกำลังติดตามผลอยู่\n\n📊 ${session.pair} รอบที่ ${session.round}/${session.maxRounds}\n💡 คาดการณ์: ${session.prediction}\n⏰ เข้าเทรดตอน: ${session.entryTime}\n🔍 เช็คผลตอน: ${nextCheckTime}\n\n⏳ กรุณารอจนกว่าการติดตามจะเสร็จสิ้น\n\n💡 หากต้องการยกเลิก พิมพ์ "ยกเลิกติดตาม"`
       });
     }
   }
@@ -382,10 +394,10 @@ class ResultTrackingService {
     return false;
   }
 
-  // 🔧 Helper method สำหรับ debug (แสดงเวลา UTC+7)
+  // 🔧 Helper method สำหรับ debug (เพิ่มข้อมูลเวลา)
   async debugTracking(userId) {
     try {
-      console.log(`🔧 Debug tracking for user ${userId} (UTC+7)`);
+      console.log(`🔧 Debug tracking for user ${userId}`);
       
       const session = this.trackingSessions.get(userId);
       if (!session) {
@@ -396,21 +408,13 @@ class ResultTrackingService {
       const nextCheckTime = this.getCheckTimeDisplay(session.entryTime);
       const delayMs = this.calculateCheckDelay(session.entryTime);
       
-      // แสดงเวลาปัจจุบันใน UTC+7
-      const now = new Date();
-      const utc7Now = new Date(now.getTime() + (7 * 60 * 60 * 1000));
-      const currentTimeUTC7 = utc7Now.toISOString().substr(11, 5);
-      
       console.log(`📊 Session data:`, JSON.stringify(session, null, 2));
-      console.log(`🕐 Current time (UTC+7): ${currentTimeUTC7}`);
-      console.log(`🕐 Next check time (UTC+7): ${nextCheckTime}`);
+      console.log(`🕐 Next check time: ${nextCheckTime}`);
       console.log(`⏳ Delay: ${Math.round(delayMs / 1000)} seconds`);
       
       return {
         session,
-        timezone: 'UTC+7',
-        currentTime: currentTimeUTC7,
-        nextCheckTime: nextCheckTime,
+        nextCheckTime,
         delaySeconds: Math.round(delayMs / 1000),
         isBlocked: this.isUserBlocked(userId)
       };
