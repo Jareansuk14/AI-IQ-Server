@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - อัปเดต Referral System
+// AI-Server/controllers/lineController.js - โค้ดทั้งหมดพร้อม Referral Cards
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -12,9 +12,10 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  // อัปเดต Referral Cards
+  // เพิ่ม Referral Cards
   createReferralShareMessage,
   createReferralInputMessage,
+  createReferralStatsMessage,
   createReferralSuccessMessage
 } = require('../utils/flexMessages');
 const User = require('../models/user');
@@ -120,7 +121,7 @@ const saveInteraction = async (user, command, imageId, aiResponse, processingTim
   }
 };
 
-// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ - อัปเดตใหม่พร้อม Share Target Picker
+// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ - อัปเดตพร้อม Referral Cards
 const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
   const userId = event.source.userId;
@@ -156,13 +157,13 @@ const handleSpecialCommand = async (event) => {
       return lineService.replyMessage(event.replyToken, forexMessage);
     }
     
-    // 🆕 อัปเดตการจัดการรหัสแนะนำให้ใช้ Share Target Picker
+    // 🆕 อัปเดตการจัดการรหัสแนะนำให้ใช้การ์ด
     if (text === 'รหัสแนะนำ' || text === 'referral' || text === 'แชร์' || text === 'share') {
       try {
         // ดึงข้อมูลสถิติการแนะนำ
         const referralStats = await creditService.getReferralSummary(userId);
         
-        // สร้างและส่งการ์ดใหม่พร้อม Share Target Picker
+        // สร้างและส่งการ์ด
         const referralCard = createReferralShareMessage(
           referralStats.referralCode, 
           referralStats.totalReferred, 
@@ -173,25 +174,25 @@ const handleSpecialCommand = async (event) => {
         console.error('Error creating referral share card:', error);
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: '❌ เกิดข้อผิดพลาดในการแสดงข้อมูลการแนะนำ\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
+          text: '❌ เกิดข้อผิดพลาดในการแสดงข้อมูลการแนะนำ'
         });
       }
     }
     
-    // คำสั่งใหม่สำหรับใช้รหัสแนะนำ
+    // 🆕 เพิ่มคำสั่งใหม่สำหรับใช้รหัสแนะนำ
     if (text === 'ใช้รหัส' || text === 'กรอกรหัส' || text === 'รหัสเพื่อน' || text === 'ป้อนรหัส') {
       const inputCard = createReferralInputMessage();
       return lineService.replyMessage(event.replyToken, inputCard);
     }
     
-    // การใช้รหัสแนะนำ - อัปเดตให้รองรับการแจ้งเตือนแบบใหม่
+    // การใช้รหัสแนะนำ - อัปเดตให้ใช้การ์ดตอบกลับ
     if (text.startsWith('code:') || text.startsWith('รหัส:')) {
       const referralCode = text.split(':')[1].trim();
       
       if (!referralCode) {
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: '❌ รูปแบบรหัสไม่ถูกต้อง\n\n📝 กรุณาระบุในรูปแบบ:\n• "CODE:ABCDEF" หรือ\n• "รหัส:ABCDEF"\n\n💡 ตัวอย่าง: รหัส:A1B2C3'
+          text: '❌ รูปแบบรหัสไม่ถูกต้อง\nกรุณาระบุในรูปแบบ "CODE:ABCDEF" หรือ "รหัส:ABCDEF"'
         });
       }
       
@@ -201,7 +202,7 @@ const handleSpecialCommand = async (event) => {
         if (!validation.valid) {
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: `❌ ${validation.reason}\n\n💡 ขอรหัสใหม่จากเพื่อนหรือตรวจสอบการพิมพ์`
+            text: `❌ ${validation.reason}`
           });
         }
         
@@ -210,24 +211,21 @@ const handleSpecialCommand = async (event) => {
         
         const result = await creditService.applyReferralCode(userId, referralCode.toUpperCase());
         
-        // อัปเดตข้อมูลสำหรับการ์ดแจ้งเตือน
-        const referrerStats = await creditService.getReferralSummary(referrer.lineUserId);
-        
-        // ส่งการ์ดแจ้งเตือนสำเร็จให้ผู้แนะนำ
+        // 🆕 ส่งการ์ดแจ้งเตือนสำเร็จ
         const successCard = createReferralSuccessMessage(
           {
-            totalCredits: referrer.credits + 10,
-            totalReferred: referrerStats.totalReferred
+            totalCredits: referrer.credits + 10, // เครดิตหลังได้รับรางวัล
+            totalReferred: await User.countDocuments({ referredBy: referrer.referralCode }) + 1
           },
           {
-            name: user.displayName || 'เพื่อน'
+            name: user.displayName
           }
         );
         
         // ส่งข้อความสำเร็จให้ผู้ใช้รหัส
         await lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `✅ ใช้รหัสแนะนำสำเร็จ!\n\n🎁 คุณได้รับเพิ่ม 5 เครดิต\n💎 เครดิตคงเหลือ: ${result.credits} เครดิต\n\n🎉 ขอบคุณที่ใช้รหัสแนะนำ!\n📸 สามารถเริ่มใช้งาน AI ได้เลย\n\n💡 แชร์รหัสของคุณเพื่อรับเครดิตเพิ่ม!`
+          text: `✅ ใช้รหัสแนะนำสำเร็จ!\n🎁 คุณได้รับเพิ่ม 5 เครดิต\n💎 เครดิตคงเหลือ: ${result.credits} เครดิต\n\n🎉 ขอบคุณที่ใช้รหัสแนะนำ!`
         });
         
         // ส่งการ์ดแจ้งเตือนให้ผู้แนะนำ
@@ -235,10 +233,9 @@ const handleSpecialCommand = async (event) => {
         
         return true;
       } catch (error) {
-        console.error('Error applying referral code:', error);
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: `❌ ไม่สามารถใช้รหัสแนะนำได้: ${error.message}\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ`
+          text: `❌ ไม่สามารถใช้รหัสแนะนำได้: ${error.message}`
         });
       }
     }
@@ -248,12 +245,12 @@ const handleSpecialCommand = async (event) => {
     console.error('Error handling special command:', error);
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: 'ขออภัย เกิดข้อผิดพลาดในการประมวลผลคำสั่ง\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
+      text: 'ขออภัย เกิดข้อผิดพลาดในการประมวลผลคำสั่ง'
     });
   }
 };
 
-// ฟังก์ชันจัดการ Postback Events - อัปเดตให้รองรับ Share Target Picker
+// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Referral Actions
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -264,7 +261,7 @@ const handlePostbackEvent = async (event) => {
     console.log('Handling postback event:', action, data);
     
     if (resultTrackingService.isUserBlocked(userId) && 
-        !['continue_trading', 'stop_trading', 'view_referral_share'].includes(action)) {
+        !['continue_trading', 'stop_trading', 'view_referral_share', 'view_referral_stats'].includes(action)) {
       await resultTrackingService.handleBlockedUserMessage(userId);
       return;
     }
@@ -425,7 +422,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
         
-      // 🆕 เคสใหม่สำหรับ Referral System (ตัดฟังก์ชันดูสถิติออก)
+      // 🆕 เคสใหม่สำหรับ Referral System
       case 'view_referral_share':
         try {
           const referralStats = await creditService.getReferralSummary(userId);
@@ -443,11 +440,24 @@ const handlePostbackEvent = async (event) => {
           });
         }
         
+      case 'view_referral_stats':
+        try {
+          const detailedStats = await creditService.getReferralDetailedStats(userId);
+          const statsCard = createReferralStatsMessage(detailedStats);
+          return lineService.replyMessage(event.replyToken, statsCard);
+        } catch (error) {
+          console.error('Error showing referral stats:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ เกิดข้อผิดพลาดในการแสดงสถิติ'
+          });
+        }
+        
       case 'share_to_get_referral':
         try {
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: '📢 วิธีขอรหัสแนะนำจากเพื่อน:\n\n1️⃣ ส่งข้อความนี้ให้เพื่อน:\n"ขอรหัสแนะนำ AI Bot หน่อย 🙏"\n\n2️⃣ ให้เพื่อนพิมพ์ "แชร์" ใน Bot นี้\n\n3️⃣ เพื่อนจะได้การ์ดพร้อมรหัสแชร์\n\n4️⃣ เอารหัสมาพิมพ์ในรูปแบบ:\n"รหัส:ABCDEF"\n\n🎁 คุณจะได้ 5 เครดิต เพื่อนได้ 10 เครดิต!'
+            text: '📢 วิธีขอรหัสแนะนำจากเพื่อน:\n\n1️⃣ ส่งข้อความนี้ให้เพื่อน:\n"ขอรหัสแนะนำ AI Bot หน่อย 🙏"\n\n2️⃣ ให้เพื่อนพิมพ์ "แชร์" ใน Bot นี้\n\n3️⃣ เพื่อนจะได้รหัส 6 ตัวอักษร\n\n4️⃣ เอารหัสมาพิมพ์ในรูปแบบ:\n"รหัส:ABCDEF"\n\n🎁 คุณจะได้ 5 เครดิต เพื่อนได้ 10 เครดิต!'
           });
         } catch (error) {
           console.error('Error showing share instruction:', error);
@@ -461,14 +471,14 @@ const handlePostbackEvent = async (event) => {
         console.log('Unknown postback action:', action);
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: 'ขออภัย ไม่เข้าใจคำสั่งนี้\n\n💡 กรุณาใช้เมนูด้านล่างหรือพิมพ์คำสั่งที่ถูกต้อง'
+          text: 'ขออภัย ไม่เข้าใจคำสั่งนี้'
         });
     }
   } catch (error) {
     console.error('Error handling postback event:', error);
     return lineService.replyMessage(event.replyToken, {
       type: 'text',
-      text: 'ขออภัย เกิดข้อผิดพลาดในการประมวลผลคำสั่ง\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
+      text: 'ขออภัย เกิดข้อผิดพลาดในการประมวลผลคำสั่ง'
     });
   }
 };
