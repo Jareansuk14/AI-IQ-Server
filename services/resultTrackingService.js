@@ -19,6 +19,42 @@ class ResultTrackingService {
     return date.toLocaleTimeString('th-TH', options);
   }
 
+  // 🧮 คำนวณ entryTime สำหรับรอบปัจจุบัน (ใช้ lastCheckTime)
+  calculateCurrentRoundEntryTime(session) {
+    try {
+      // รอบแรก: ใช้ entryTime เดิม
+      if (session.round === 1) {
+        console.log(`📊 Round ${session.round} - Using original entry time: ${session.entryTime}`);
+        return session.entryTime;
+      }
+      
+      // รอบ 2-7: ใช้เวลาที่เช็คผลรอบก่อนหน้า
+      if (session.lastCheckTime) {
+        console.log(`📊 Round ${session.round} - Using last check time as entry: ${session.lastCheckTime}`);
+        return session.lastCheckTime;
+      }
+      
+      // fallback: ใช้เวลาปัจจุบันที่ปรับเป็น 5-minute intervals
+      const bangkokNow = this.getBangkokTime();
+      const minutes = bangkokNow.getMinutes();
+      const roundedMinutes = Math.floor(minutes / 5) * 5;
+      
+      const roundedTime = new Date(bangkokNow);
+      roundedTime.setMinutes(roundedMinutes, 0, 0);
+      
+      const roundedTimeStr = this.formatBangkokTime(roundedTime);
+      
+      console.log(`🕐 Fallback - Rounded time: ${roundedTimeStr}`);
+      
+      return roundedTimeStr;
+      
+    } catch (error) {
+      console.error('❌ Error calculating current round entry time:', error);
+      // fallback: ใช้เวลาต้นฉบับ
+      return session.entryTime;
+    }
+  }
+
   // 🎯 เริ่มติดตามผล (แก้ไขแล้ว - ยึดเวลาผู้ใช้เข้าเทรดเป็นหลัก)
   async startTracking(userId, prediction, pair, entryTime) {
     try {
@@ -38,7 +74,8 @@ class ResultTrackingService {
         maxRounds: 7,
         isActive: true,
         startedAt: this.getBangkokTime(), // Bangkok timezone
-        results: []
+        results: [],
+        lastCheckTime: null // เก็บเวลาเช็คผลล่าสุด
       };
 
       this.trackingSessions.set(userId, session);
@@ -149,7 +186,7 @@ class ResultTrackingService {
     }
   }
 
-  // 🔍 เช็คผลแบบเรียบง่าย (ไม่เปลี่ยน)
+  // 🔍 เช็คผลแบบเรียบง่าย (แก้ไขให้รองรับรอบ 2-7)
   async checkResult(userId) {
     try {
       const session = this.trackingSessions.get(userId);
@@ -166,8 +203,21 @@ class ResultTrackingService {
         text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n⏳ กรุณารอสักครู่`
       });
 
-      // 🎯 เรียก API แบบง่าย - ดูแท่งเทียนที่ถูกต้องตาม entryTime
-      const candleResult = await iqOptionService.getCurrentCandle(session.pair, session.entryTime);
+      // 🎯 คำนวณ entryTime ที่ถูกต้องสำหรับแต่ละรอบ
+      let effectiveEntryTime;
+      
+      if (session.round === 1) {
+        // รอบแรก: ใช้ entryTime ตั้งแต่แรก
+        effectiveEntryTime = session.entryTime;
+        console.log(`📊 Round 1 - Using original entry time: ${effectiveEntryTime}`);
+      } else {
+        // รอบ 2-7: คำนวณเวลาใหม่จากรอบก่อนหน้า
+        effectiveEntryTime = this.calculateCurrentRoundEntryTime(session);
+        console.log(`📊 Round ${session.round} - Calculated entry time: ${effectiveEntryTime}`);
+      }
+
+      // 🎯 เรียก API ด้วย entryTime ที่ถูกต้อง
+      const candleResult = await iqOptionService.getCurrentCandle(session.pair, effectiveEntryTime);
 
       console.log(`📊 Candle result:`, candleResult);
 
@@ -185,16 +235,19 @@ class ResultTrackingService {
         prediction: session.prediction,
         isWin,
         time: this.getBangkokTime(), // Bangkok timezone
-        entryTime: session.entryTime,
+        entryTime: effectiveEntryTime, // ใช้ entryTime ที่คำนวณใหม่
         checkTime: candleResult.time
       });
 
+      // 🎯 บันทึกเวลาเช็คผลสำหรับรอบถัดไป
+      session.lastCheckTime = candleResult.time;
+
       if (isWin) {
         // ชนะ - จบการติดตาม
-        await this.handleWin(userId, session, candleResult);
+        await this.handleWin(userId, session, candleResult, effectiveEntryTime);
       } else {
         // แพ้ - ตรวจสอบว่าจะทำต่อหรือไม่
-        await this.handleLose(userId, session, candleResult);
+        await this.handleLose(userId, session, candleResult, effectiveEntryTime);
       }
 
     } catch (error) {
@@ -224,8 +277,8 @@ class ResultTrackingService {
     return false; // อื่นๆ = แพ้
   }
 
-  // 🎉 จัดการเมื่อชนะ (ไม่เปลี่ยน)
-  async handleWin(userId, session, candleResult) {
+  // 🎉 จัดการเมื่อชนะ (รับ effectiveEntryTime)
+  async handleWin(userId, session, candleResult, effectiveEntryTime) {
     try {
       console.log(`🎉 User ${userId} WON at round ${session.round}`);
 
@@ -234,7 +287,7 @@ class ResultTrackingService {
       this.blockedUsers.delete(userId);
 
       // คำนวณเวลาเข้าเทรดจริงและเวลาเช็คผล
-      const entryTimeDisplay = session.entryTime;
+      const entryTimeDisplay = effectiveEntryTime; // ใช้ effectiveEntryTime แทน
       const checkTimeDisplay = candleResult.time;
 
       // ส่งข้อความแสดงความยินดี
@@ -257,22 +310,22 @@ class ResultTrackingService {
     }
   }
 
-  // ❌ จัดการเมื่อแพ้ (แก้ไขการคำนวณเวลา)
-  async handleLose(userId, session, candleResult) {
+  // ❌ จัดการเมื่อแพ้ (แก้ไขให้รับ effectiveEntryTime)
+  async handleLose(userId, session, candleResult, effectiveEntryTime) {
     try {
       console.log(`❌ User ${userId} LOST at round ${session.round}`);
 
       // ตรวจสอบว่าครบ 7 รอบหรือยัง
       if (session.round >= session.maxRounds) {
         // แพ้ครบ 7 รอบ - จบการติดตาม
-        await this.handleMaxRoundsReached(userId, session, candleResult);
+        await this.handleMaxRoundsReached(userId, session, candleResult, effectiveEntryTime);
         return;
       }
 
       // ยังไม่ครบ 7 รอบ - ทำต่อ
       session.round++;
 
-      const entryTimeDisplay = session.entryTime;
+      const entryTimeDisplay = effectiveEntryTime; // ใช้ effectiveEntryTime แทน
       const checkTimeDisplay = candleResult.time;
 
       await lineService.pushMessage(userId, {
@@ -294,8 +347,8 @@ class ResultTrackingService {
     }
   }
 
-  // 💀 จัดการเมื่อแพ้ครบ 7 รอบ (ไม่เปลี่ยน)
-  async handleMaxRoundsReached(userId, session, candleResult) {
+  // 💀 จัดการเมื่อแพ้ครบ 7 รอบ (แก้ไขให้รับ effectiveEntryTime)
+  async handleMaxRoundsReached(userId, session, candleResult, effectiveEntryTime) {
     try {
       console.log(`💀 User ${userId} LOST all 7 rounds`);
 
@@ -303,7 +356,7 @@ class ResultTrackingService {
       session.isActive = false;
       this.blockedUsers.delete(userId);
 
-      const entryTimeDisplay = session.entryTime;
+      const entryTimeDisplay = effectiveEntryTime; // ใช้ effectiveEntryTime แทน
       const checkTimeDisplay = candleResult.time;
 
       await lineService.pushMessage(userId, {
