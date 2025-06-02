@@ -118,6 +118,24 @@
       margin: 20px 0;
       font-weight: bold;
     }
+    
+    .debug-info {
+      display: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      padding: 10px;
+      border-radius: 8px;
+      margin: 10px 0;
+      font-size: 10px;
+      text-align: left;
+      white-space: pre-wrap;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    
+    .show-debug {
+      display: block !important;
+    }
   </style>
 </head>
 <body>
@@ -145,36 +163,99 @@
     <div class="error-message" id="errorMessage">
       ❌ แชร์ไม่สำเร็จ กรุณาลองใหม่
     </div>
+    
+    <div class="debug-info" id="debugInfo">
+      Debug information will appear here
+    </div>
+    
+    <button onclick="toggleDebug()" style="margin-top: 10px; padding: 5px 10px; background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 5px; font-size: 10px;">
+      🐛 Toggle Debug
+    </button>
   </div>
 
   <script>
-    // ดึง LIFF ID จาก server
+    // ดึง LIFF ID จาก server หรือใช้ค่าจาก URL
     async function getLiffConfig() {
       try {
-        const response = await fetch('/api/liff/config');
+        // ลองดึงจาก URL parameter ก่อน (สำหรับ debugging)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlLiffId = urlParams.get('liffId');
+        if (urlLiffId) {
+          console.log('Using LIFF ID from URL:', urlLiffId);
+          return urlLiffId;
+        }
+
+        // ดึงจาก server API
+        const response = await fetch('/api/liff/config', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const config = await response.json();
+        console.log('LIFF config from server:', config);
         return config.liffId;
       } catch (error) {
         console.error('Error getting LIFF config:', error);
+        // แสดง error บนหน้าจอ
+        document.getElementById('errorMessage').style.display = 'block';
+        document.getElementById('errorMessage').textContent = `❌ ไม่สามารถดึง LIFF ID: ${error.message}`;
         return null;
+      }
+    }
+
+    // เพิ่มฟังก์ชันแสดง debug info
+    function showDebugInfo(info) {
+      console.log('Debug info:', info);
+      const debugElement = document.getElementById('debugInfo');
+      if (debugElement) {
+        debugElement.innerHTML = `<pre>${JSON.stringify(info, null, 2)}</pre>`;
       }
     }
 
     async function main() {
       try {
-        // ดึง LIFF ID จาก server
+        // แสดงข้อมูล debug
+        showDebugInfo({
+          userAgent: navigator.userAgent,
+          url: window.location.href,
+          isInClient: typeof liff !== 'undefined'
+        });
+
+        // ดึง LIFF ID
         const liffId = await getLiffConfig();
         
         if (!liffId) {
-          throw new Error('LIFF ID not configured');
+          throw new Error('LIFF ID not configured or not available');
         }
+
+        console.log('Initializing LIFF with ID:', liffId);
 
         // Initialize LIFF
         await liff.init({ liffId: liffId });
 
+        console.log('LIFF initialization successful');
+        showDebugInfo({
+          liffId: liffId,
+          isLoggedIn: liff.isLoggedIn(),
+          isInClient: liff.isInClient(),
+          isApiAvailable: liff.isApiAvailable('shareTargetPicker')
+        });
+
         if (!liff.isLoggedIn()) {
+          console.log('User not logged in, redirecting to login');
           liff.login();
           return;
+        }
+
+        // ตรวจสอบว่า shareTargetPicker API ใช้งานได้หรือไม่
+        if (!liff.isApiAvailable('shareTargetPicker')) {
+          throw new Error('Share Target Picker API is not available in this context');
         }
 
         // Get referral code from URL params
@@ -190,6 +271,8 @@
 
         shareBtn.onclick = async () => {
           try {
+            console.log('Share button clicked');
+            
             // Show loading
             document.getElementById('loading').style.display = 'block';
             shareBtn.disabled = true;
@@ -198,36 +281,86 @@
             document.getElementById('successMessage').style.display = 'none';
             document.getElementById('errorMessage').style.display = 'none';
 
+            // ตรวจสอบอีกครั้งว่า API ใช้งานได้
+            if (!liff.isApiAvailable('shareTargetPicker')) {
+              throw new Error('Share Target Picker API is not available');
+            }
+
             // Create share card
             const shareCard = createReferralShareCard(referralCode);
+            console.log('Share card created:', shareCard);
             
             // Share using Share Target Picker
-            await liff.shareTargetPicker([shareCard]);
+            console.log('Calling liff.shareTargetPicker...');
+            const result = await liff.shareTargetPicker([shareCard]);
+            console.log('Share result:', result);
             
             // Show success
             document.getElementById('loading').style.display = 'none';
             document.getElementById('successMessage').style.display = 'block';
             
+            showDebugInfo({
+              action: 'share_success',
+              result: result,
+              timestamp: new Date().toISOString()
+            });
+            
             // Auto close after 2 seconds
             setTimeout(() => {
-              liff.closeWindow();
+              if (liff.isInClient()) {
+                liff.closeWindow();
+              }
             }, 2000);
             
           } catch (err) {
             console.error('Share error:', err);
             
-            // Show error
+            // Show error with details
             document.getElementById('loading').style.display = 'none';
             document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorMessage').textContent = `❌ แชร์ไม่สำเร็จ: ${err.message}`;
             shareBtn.disabled = false;
+            
+            showDebugInfo({
+              action: 'share_error',
+              error: {
+                message: err.message,
+                stack: err.stack,
+                name: err.name
+              },
+              liffContext: {
+                isInClient: liff.isInClient(),
+                isLoggedIn: liff.isLoggedIn(),
+                isApiAvailable: liff.isApiAvailable('shareTargetPicker')
+              },
+              timestamp: new Date().toISOString()
+            });
           }
         };
 
       } catch (error) {
         console.error('LIFF initialization failed:', error);
         document.getElementById('errorMessage').style.display = 'block';
-        document.getElementById('errorMessage').textContent = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อ';
+        document.getElementById('errorMessage').textContent = `❌ เกิดข้อผิดพลาดในการเชื่อมต่อ: ${error.message}`;
+        
+        showDebugInfo({
+          action: 'liff_init_error',
+          error: {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          },
+          userAgent: navigator.userAgent,
+          url: window.location.href,
+          timestamp: new Date().toISOString()
+        });
       }
+    }
+
+    // ฟังก์ชันสำหรับแสดง/ซ่อน debug info
+    function toggleDebug() {
+      const debugElement = document.getElementById('debugInfo');
+      debugElement.classList.toggle('show-debug');
     }
 
     function createReferralShareCard(referralCode) {
