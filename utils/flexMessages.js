@@ -2650,6 +2650,9 @@ function createReferralSuccessMessage(referrerData, referredData) {
   };
 }
 
+// เพิ่มในไฟล์ AI-Server/utils/flexMessages.js
+
+// 🎊 สร้าง Welcome Card สำหรับผู้ใช้ใหม่
 function createWelcomeMessage(referralCode, displayName = 'เพื่อน') {
   return {
     type: "flex",
@@ -2947,17 +2950,6 @@ function createWelcomeMessage(referralCode, displayName = 'เพื่อน') 
             },
             color: "#722ed1",
             height: "md"
-          },
-          {
-            type: "button",
-            style: "secondary",
-            action: {
-              type: "postback",
-              label: "💎 ใช้รหัสเพื่อน",
-              data: "action=share_to_get_referral"
-            },
-            height: "sm",
-            margin: "sm"
           }
         ],
         spacing: "sm",
