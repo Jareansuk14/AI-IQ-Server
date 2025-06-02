@@ -2116,7 +2116,7 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
   // ใช้ BASE_URL จาก environment หรือ default localhost
   const baseURL = process.env.BASE_URL || 'http://localhost:3000';
   const liffUrl = `${baseURL}/liff-share?code=${referralCode}`;
-  const lineUrl = `https://line.me/R/oaMessage/@${process.env.BOT_ADD_URL?.split('@')[1] || '033mebpp'}/?%20CODE:${referralCode}`;
+  const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
   
   return {
     type: "flex",
