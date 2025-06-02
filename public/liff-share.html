@@ -148,19 +148,10 @@
   </div>
 
   <script>
-    // 🎯 กำหนด LIFF ID โดยตรง - แก้ไขค่านี้ให้ตรงกับ LIFF ID ของคุณ
-    const LIFF_ID = '2007512451-RBO1MpYy';
-    // ตัวอย่าง: const LIFF_ID = '2007512451-RBO1MpYy';
-
     async function main() {
       try {
-        // ตรวจสอบว่าได้ตั้งค่า LIFF ID แล้วหรือไม่
-        if (!LIFF_ID || LIFF_ID === 'YOUR_LIFF_ID_HERE') {
-          throw new Error('กรุณาตั้งค่า LIFF_ID ในไฟล์ liff-share.html');
-        }
-
-        // Initialize LIFF
-        await liff.init({ liffId: LIFF_ID });
+        // Initialize LIFF (ใส่ LIFF ID ที่ได้จาก LINE Developers Console)
+        await liff.init({ liffId: "2007512451-RBO1MpYy" });
 
         if (!liff.isLoggedIn()) {
           liff.login();
