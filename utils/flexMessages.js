@@ -2113,9 +2113,8 @@ function createContinueTradeMessage() {
 
 // 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง (เพิ่มปุ่ม LIFF Share)
 function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned = 0) {
-  // ใช้ BASE_URL จาก environment หรือ default localhost
-  const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-  const liffUrl = `${baseURL}/liff-share?code=${referralCode}`;
+  // ⭐ เปลี่ยนจาก BASE_URL เป็น LIFF URL โดยตรง
+  const liffUrl = `https://liff.line.me/2007512451-RBO1MpYy?code=${referralCode}`;
   const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
   
   return {
@@ -2310,7 +2309,7 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
             action: {
               type: "uri",
               label: "🎁 แชร์ให้เพื่อน",
-              uri: liffUrl
+              uri: liffUrl  // ⭐ ใช้ LIFF URL แทน
             },
             color: "#722ed1",
             height: "md"
