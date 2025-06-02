@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>แชร์รหัสแนะนำ</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #722ed1 0%, #9c5bd1 100%);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+    
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 30px;
+      text-align: center;
+      max-width: 350px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    h2 {
+      margin: 0 0 10px 0;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    
+    .subtitle {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+    
+    .code-display {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 15px;
+      border-radius: 12px;
+      margin: 20px 0;
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    
+    #shareBtn {
+      background: linear-gradient(45deg, #49aa19, #5cb85c);
+      border: none;
+      color: white;
+      padding: 15px 30px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+      margin: 10px 0;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(73, 170, 25, 0.3);
+    }
+    
+    #shareBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(73, 170, 25, 0.4);
+    }
+    
+    #shareBtn:disabled {
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    
+    .loading {
+      display: none;
+      margin: 20px 0;
+    }
+    
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    .success-message {
+      display: none;
+      background: rgba(73, 170, 25, 0.2);
+      color: #49aa19;
+      padding: 15px;
+      border-radius: 12px;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    
+    .error-message {
+      display: none;
+      background: rgba(255, 69, 58, 0.2);
+      color: #ff453a;
+      padding: 15px;
+      border-radius: 12px;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎁 แชร์รหัสแนะนำ</h2>
+    <p class="subtitle">แชร์ให้เพื่อนเพื่อรับเครดิตฟรี</p>
+    
+    <div class="code-display" id="referralCode">
+      กำลังโหลด...
+    </div>
+    
+    <button id="shareBtn" disabled>
+      🚀 แชร์ให้เพื่อน
+    </button>
+    
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>กำลังแชร์...</p>
+    </div>
+    
+    <div class="success-message" id="successMessage">
+      ✅ แชร์สำเร็จ!
+    </div>
+    
+    <div class="error-message" id="errorMessage">
+      ❌ แชร์ไม่สำเร็จ กรุณาลองใหม่
+    </div>
+  </div>
+
+  <script>
+    // ดึง LIFF ID จาก server
+    async function getLiffConfig() {
+      try {
+        const response = await fetch('/api/liff/config');
+        const config = await response.json();
+        return config.liffId;
+      } catch (error) {
+        console.error('Error getting LIFF config:', error);
+        return null;
+      }
+    }
+
+    async function main() {
+      try {
+        // ดึง LIFF ID จาก server
+        const liffId = await getLiffConfig();
+        
+        if (!liffId) {
+          throw new Error('LIFF ID not configured');
+        }
+
+        // Initialize LIFF
+        await liff.init({ liffId: liffId });
+
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+
+        // Get referral code from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const referralCode = urlParams.get('code') || 'DEMO123';
+        
+        // Display referral code
+        document.getElementById('referralCode').textContent = referralCode;
+        
+        // Enable share button
+        const shareBtn = document.getElementById('shareBtn');
+        shareBtn.disabled = false;
+
+        shareBtn.onclick = async () => {
+          try {
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            shareBtn.disabled = true;
+            
+            // Hide previous messages
+            document.getElementById('successMessage').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+
+            // Create share card
+            const shareCard = createReferralShareCard(referralCode);
+            
+            // Share using Share Target Picker
+            await liff.shareTargetPicker([shareCard]);
+            
+            // Show success
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'block';
+            
+            // Auto close after 2 seconds
+            setTimeout(() => {
+              liff.closeWindow();
+            }, 2000);
+            
+          } catch (err) {
+            console.error('Share error:', err);
+            
+            // Show error
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'block';
+            shareBtn.disabled = false;
+          }
+        };
+
+      } catch (error) {
+        console.error('LIFF initialization failed:', error);
+        document.getElementById('errorMessage').style.display = 'block';
+        document.getElementById('errorMessage').textContent = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อ';
+      }
+    }
+
+    function createReferralShareCard(referralCode) {
+      return {
+        type: "flex",
+        altText: `🎁 รับเครดิตฟรี! ใช้รหัส ${referralCode}`,
+        contents: {
+          type: "bubble",
+          header: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: "🎁",
+                    size: "xl",
+                    color: "#ffffff",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: "รับเครดิตฟรี!",
+                    weight: "bold",
+                    color: "#ffffff",
+                    size: "lg",
+                    flex: 4,
+                    margin: "md"
+                  }
+                ]
+              },
+              {
+                type: "text",
+                text: "เพื่อนแนะนำให้ใช้บอทนี้",
+                color: "#ffffff",
+                size: "sm",
+                align: "center",
+                margin: "md"
+              }
+            ],
+            backgroundColor: "#722ed1",
+            paddingAll: "20px"
+          },
+          body: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              // รหัสแนะนำ
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: "🔥 รหัสพิเศษ",
+                    weight: "bold",
+                    size: "md",
+                    color: "#722ed1",
+                    align: "center"
+                  },
+                  {
+                    type: "text",
+                    text: referralCode,
+                    weight: "bold",
+                    size: "xxl",
+                    color: "#722ed1",
+                    align: "center",
+                    margin: "sm",
+                    decoration: "none"
+                  },
+                  {
+                    type: "text",
+                    text: "พิมพ์ รหัส:" + referralCode,
+                    size: "sm",
+                    color: "#49aa19",
+                    align: "center",
+                    margin: "sm",
+                    weight: "bold"
+                  }
+                ],
+                spacing: "sm",
+                margin: "lg",
+                action: {
+                  type: "clipboard",
+                  clipboardText: "รหัส:" + referralCode
+                }
+              },
+              {
+                type: "separator",
+                margin: "xl",
+                color: "#303030"
+              },
+              // ประโยชน์
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: "🎯 ประโยชน์ที่ได้รับ:",
+                    weight: "bold",
+                    color: "#ffffff",
+                    size: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: "✅ คุณได้ 5 เครดิตฟรี\n✅ เพื่อนได้ 10 เครดิต\n✅ วิเคราะห์รูปภาพด้วย AI\n✅ ระบบ AI-Auto Forex",
+                    color: "#8c8c8c",
+                    size: "xs",
+                    wrap: true,
+                    margin: "sm"
+                  }
+                ],
+                margin: "lg"
+              },
+              {
+                type: "separator",
+                margin: "xl",
+                color: "#303030"
+              },
+              // วิธีใช้
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: "📝 วิธีใช้รหัส:",
+                    weight: "bold",
+                    color: "#ffffff",
+                    size: "sm"
+                  },
+                  {
+                    type: "text",
+                    text: "1️⃣ กดปุ่ม \"เริ่มใช้งาน\" ด้านล่าง\n2️⃣ พิมพ์ \"รหัส:" + referralCode + "\"\n3️⃣ รับเครดิตฟรีทันที!",
+                    color: "#8c8c8c",
+                    size: "xs",
+                    wrap: true,
+                    margin: "sm"
+                  }
+                ],
+                margin: "lg"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "20px",
+            backgroundColor: "#1f1f1f"
+          },
+          footer: {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "button",
+                style: "primary",
+                action: {
+                  type: "uri",
+                  label: "🚀 เริ่มใช้งาน",
+                  uri: "https://line.me/R/ti/p/@033mebpp"
+                },
+                color: "#722ed1",
+                height: "md"
+              },
+              {
+                type: "text",
+                text: "⚠️ ใช้ได้เพียงครั้งเดียว",
+                color: "#d89614",
+                size: "xs",
+                align: "center",
+                margin: "sm"
+              }
+            ],
+            spacing: "sm",
+            paddingAll: "20px",
+            backgroundColor: "#1f1f1f"
+          }
+        }
+      };
+    }
+
+    main();
+  </script>
+</body>
+</html>

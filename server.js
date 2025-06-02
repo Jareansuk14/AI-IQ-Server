@@ -1,4 +1,4 @@
-//AI-Server/server.js
+//AI-Server/server.js - เพิ่มรองรับ LIFF Share Target Picker
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -27,8 +27,25 @@ app.use(cors({
   credentials: true
 }));
 
+// ✅ เสิร์ฟ static files สำหรับ LIFF Apps
+app.use('/public', express.static(path.join(__dirname, 'public')));
+
 // Serve static images for CALL/PUT signals (เพิ่มสำหรับ AI-Auto)
 app.use('/images', express.static(path.join(__dirname, 'assets')));
+
+// ✅ เพิ่ม route สำหรับ LIFF Share App
+app.get('/liff-share', (req, res) => {
+  const liffHtmlPath = path.join(__dirname, 'public', 'liff-share.html');
+  
+  if (fs.existsSync(liffHtmlPath)) {
+    res.sendFile(liffHtmlPath);
+  } else {
+    res.status(404).json({
+      error: 'LIFF app not found',
+      message: 'Please create public/liff-share.html file'
+    });
+  }
+});
 
 // เส้นทาง
 app.use('/webhook', require('./routes/webhook'));
@@ -40,6 +57,117 @@ app.use('/payment', require('./routes/payment')); // เพิ่ม route เ�
 // เส้นทางสำหรับทดสอบว่าเซิร์ฟเวอร์ทำงานหรือไม่
 app.get('/', (req, res) => {
   res.send('LINE Bot server is running!');
+});
+
+// ✅ เพิ่ม API สำหรับส่ง LIFF config ไปยัง frontend
+app.get('/api/liff/config', (req, res) => {
+  res.json({
+    liffId: process.env.LIFF_ID || null
+  });
+});
+
+// ✅ เพิ่ม API สำหรับตรวจสอบ LIFF configuration
+app.get('/api/liff/status', (req, res) => {
+  const liffHtmlPath = path.join(__dirname, 'public', 'liff-share.html');
+  const liffExists = fs.existsSync(liffHtmlPath);
+  
+  res.json({
+    liffApp: {
+      path: liffHtmlPath,
+      exists: liffExists,
+      url: liffExists ? `${process.env.BASE_URL || 'http://localhost:3000'}/liff-share` : null
+    },
+    environment: {
+      baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+      liffId: process.env.LIFF_ID || 'NOT_SET'
+    },
+    ready: liffExists && process.env.LIFF_ID
+  });
+});
+
+// ✅ เพิ่ม API สำหรับทดสอบ Share Target Picker
+app.get('/api/liff/test-share', (req, res) => {
+  const { code } = req.query;
+  
+  if (!code) {
+    return res.status(400).json({
+      error: 'Missing referral code',
+      usage: '/api/liff/test-share?code=ABC123'
+    });
+  }
+  
+  const testShareCard = {
+    type: "flex",
+    altText: `🎁 รับเครดิตฟรี! ใช้รหัส ${code}`,
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "🎁 รับเครดิตฟรี!",
+            weight: "bold",
+            color: "#ffffff",
+            size: "lg",
+            align: "center"
+          }
+        ],
+        backgroundColor: "#722ed1",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: `รหัส: ${code}`,
+            weight: "bold",
+            size: "xl",
+            color: "#722ed1",
+            align: "center"
+          },
+          {
+            type: "text",
+            text: `พิมพ์ รหัส:${code}`,
+            size: "sm",
+            color: "#49aa19",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "uri",
+              label: "🚀 เริ่มใช้งาน",
+              uri: "https://line.me/R/ti/p/@033mebpp"
+            },
+            color: "#722ed1"
+          }
+        ],
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+  
+  res.json({
+    message: 'Test share card generated',
+    referralCode: code,
+    shareCard: testShareCard,
+    liffUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/liff-share?code=${code}`
+  });
 });
 
 // เพิ่มเส้นทางสำหรับตรวจสอบสถานะระบบ
@@ -223,6 +351,34 @@ app.get('/api/setup/assets', (req, res) => {
     });
   } catch (error) {
     console.error('Setup assets error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ เพิ่ม API สำหรับสร้างโฟลเดอร์ public (หากยังไม่มี)
+app.get('/api/setup/liff', (req, res) => {
+  try {
+    const publicPath = path.join(__dirname, 'public');
+    
+    // สร้างโฟลเดอร์ public หากไม่มี
+    if (!fs.existsSync(publicPath)) {
+      fs.mkdirSync(publicPath, { recursive: true });
+      console.log('Created public directory');
+    }
+    
+    res.json({
+      message: 'Public directory ready for LIFF apps',
+      path: publicPath,
+      note: 'Please create liff-share.html in this directory and set LIFF_ID in environment variables',
+      nextSteps: [
+        '1. Create LIFF app in LINE Developers Console',
+        '2. Set LIFF_ID in .env file',
+        '3. Create public/liff-share.html file',
+        '4. Test with /api/liff/status'
+      ]
+    });
+  } catch (error) {
+    console.error('Setup LIFF error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -478,6 +634,15 @@ app.get('/api/test/full-system', async (req, res) => {
       ready: callImageExists && putImageExists
     };
     
+    // ✅ ทดสอบ LIFF
+    const liffHtmlExists = fs.existsSync(path.join(__dirname, 'public', 'liff-share.html'));
+    results.tests.liff = {
+      htmlExists: liffHtmlExists,
+      liffId: process.env.LIFF_ID ? 'SET' : 'NOT_SET',
+      baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+      ready: liffHtmlExists && process.env.LIFF_ID
+    };
+    
     res.json(results);
   } catch (error) {
     console.error('Error running full system test:', error);
@@ -495,7 +660,7 @@ if (process.env.NODE_ENV === 'production') {
     
     app.get('*', (req, res) => {
       // ยกเว้นเส้นทางสำหรับ API และ webhook
-      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment') || req.path.startsWith('/images')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/webhook') || req.path.startsWith('/payment') || req.path.startsWith('/images') || req.path.startsWith('/public') || req.path.startsWith('/liff-')) {
         return next();
       }
       res.sendFile(path.join(clientBuildPath, 'index.html'));
@@ -552,12 +717,15 @@ connectDB()
       console.log(`Server running on port ${PORT}`);
       console.log(`AI-Auto images served from: ${path.join(__dirname, 'assets')}`);
       console.log(`Image URLs: ${process.env.BASE_URL || `http://localhost:${PORT}`}/images/`);
+      console.log(`LIFF Apps served from: ${path.join(__dirname, 'public')}`);
+      console.log(`LIFF Share URL: ${process.env.BASE_URL || `http://localhost:${PORT}`}/liff-share`);
       console.log(`Result Tracking System: READY`);
       console.log(`IQ Option Integration: READY`);
       console.log(`Available API endpoints:`);
       console.log(`  - GET /api/test/full-system`);
-      console.log(`  - GET /api/tracking/stats`);
-      console.log(`  - GET /api/iq-option/test`);
+      console.log(`  - GET /api/liff/status`);
+      console.log(`  - GET /api/setup/liff`);
+      console.log(`  - GET /liff-share?code=ABC123`);
     });
   });
 

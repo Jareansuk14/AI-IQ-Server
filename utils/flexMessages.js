@@ -2111,8 +2111,11 @@ function createContinueTradeMessage() {
   };
 }
 
-// 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง (ตัดปุ่มดูสถิติออก)
+// 🎯 การ์ดแสดงรหัสแนะนำของตัวเอง (เพิ่มปุ่ม LIFF Share)
 function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned = 0) {
+  // ใช้ BASE_URL จาก environment หรือ default localhost
+  const baseURL = process.env.BASE_URL || 'http://localhost:3000';
+  const liffUrl = `${baseURL}/liff-share?code=${referralCode}`;
   const lineUrl = `https://line.me/R/oaMessage/@033mebpp/?%20CODE:${referralCode}`;
   
   return {
@@ -2283,7 +2286,7 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
               },
               {
                 type: "text",
-                text: "• คัดลอกรหัสด้านบนแล้วส่งให้เพื่อน\n• หรือกดปุ่ม \"แชร์ลิงก์\" ด้านล่าง\n• เพื่อนพิมพ์ \"รหัส:" + referralCode + "\"\n• คุณได้ 10 เครดิต เพื่อนได้ 5 เครดิต",
+                text: "• กดปุ่ม \"แชร์ให้เพื่อน\" เพื่อส่งการ์ดสวยๆ\n• หรือคัดลอกรหัสด้านบนแล้วส่งเอง\n• เพื่อนพิมพ์ \"รหัส:" + referralCode + "\"\n• คุณได้ 10 เครดิต เพื่อนได้ 5 เครดิต",
                 color: "#8c8c8c",
                 size: "xs",
                 wrap: true,
@@ -2306,11 +2309,22 @@ function createReferralShareMessage(referralCode, totalReferred = 0, totalEarned
             style: "primary",
             action: {
               type: "uri",
-              label: "📤 แชร์ลิงก์ LINE",
-              uri: lineUrl
+              label: "🎁 แชร์ให้เพื่อน",
+              uri: liffUrl
             },
             color: "#722ed1",
             height: "md"
+          },
+          {
+            type: "button",
+            style: "secondary",
+            action: {
+              type: "uri",
+              label: "📤 แชร์ลิงก์ LINE",
+              uri: lineUrl
+            },
+            height: "sm",
+            margin: "sm"
           }
         ],
         spacing: "sm",
