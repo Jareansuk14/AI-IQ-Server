@@ -150,8 +150,15 @@
   <script>
     async function main() {
       try {
-        // Initialize LIFF (ใส่ LIFF ID ที่ได้จาก LINE Developers Console)
-        await liff.init({ liffId: "2007512451-RBO1MpYy" });
+        // ดึง LIFF config จาก server
+        const config = await fetch('/api/liff/config').then(r => r.json());
+        
+        // Extract LIFF ID from LIFF_URL (เช่น https://liff.line.me/2007512451-ABCDEFGH)
+        const liffId = config.liffUrl ? config.liffUrl.split('/').pop() : "YOUR_LIFF_ID_HERE";
+        const botAddUrl = config.botAddUrl || "https://line.me/R/ti/p/@033mebpp";
+        
+        // Initialize LIFF
+        await liff.init({ liffId: liffId });
 
         if (!liff.isLoggedIn()) {
           liff.login();
@@ -180,7 +187,7 @@
             document.getElementById('errorMessage').style.display = 'none';
 
             // Create share card
-            const shareCard = createReferralShareCard(referralCode);
+            const shareCard = createReferralShareCard(referralCode, botAddUrl);
             
             // Share using Share Target Picker
             await liff.shareTargetPicker([shareCard]);
@@ -211,7 +218,7 @@
       }
     }
 
-    function createReferralShareCard(referralCode) {
+    function createReferralShareCard(referralCode, botAddUrl) {
       return {
         type: "flex",
         altText: `🎁 รับเครดิตฟรี! ใช้รหัส ${referralCode}`,
@@ -370,7 +377,7 @@
                 action: {
                   type: "uri",
                   label: "🚀 เริ่มใช้งาน",
-                  uri: "https://line.me/R/ti/p/@033mebpp"
+                  uri: botAddUrl
                 },
                 color: "#722ed1",
                 height: "md"

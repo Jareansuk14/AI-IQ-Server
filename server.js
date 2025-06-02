@@ -9,6 +9,12 @@ require('dotenv').config();
 
 const app = express();
 
+// ✅ รองรับทั้งชื่อตัวแปรแบบเดิมและแบบใหม่
+const config = {
+  channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN || process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.CHANNEL_SECRET || process.env.LINE_CHANNEL_SECRET,
+};
+
 // ต้องจัดการ raw body ก่อนใช้ middleware อื่นๆ และเพิ่มขีดจำกัดขนาด
 app.use(express.json({
   verify: (req, res, buf) => {
@@ -62,7 +68,8 @@ app.get('/', (req, res) => {
 // ✅ เพิ่ม API สำหรับส่ง LIFF config ไปยัง frontend
 app.get('/api/liff/config', (req, res) => {
   res.json({
-    liffId: process.env.LIFF_ID || null
+    liffUrl: process.env.LIFF_URL || null,
+    botAddUrl: process.env.BOT_ADD_URL || "https://line.me/R/ti/p/@033mebpp"
   });
 });
 
@@ -79,9 +86,11 @@ app.get('/api/liff/status', (req, res) => {
     },
     environment: {
       baseUrl: process.env.BASE_URL || 'http://localhost:3000',
-      liffId: process.env.LIFF_ID || 'NOT_SET'
+      liffUrl: process.env.LIFF_URL || 'NOT_SET',
+      botAddUrl: process.env.BOT_ADD_URL || "https://line.me/R/ti/p/@033mebpp"
     },
-    ready: liffExists && process.env.LIFF_ID
+    ready: liffExists && process.env.LIFF_URL,
+    note: 'LIFF_URL should be: https://liff.line.me/YOUR_LIFF_ID'
   });
 });
 
@@ -776,4 +785,3 @@ process.on('SIGTERM', async () => {
   
   process.exit(0);
 });
-
