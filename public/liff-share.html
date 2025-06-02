@@ -150,8 +150,22 @@
   <script>
     async function main() {
       try {
+        // Get LIFF configuration from server
+        let config;
+        try {
+          const configResponse = await fetch('/api/liff/config');
+          config = await configResponse.json();
+        } catch (fetchError) {
+          console.error('Failed to fetch LIFF config:', fetchError);
+          throw new Error('NetworkError: Cannot connect to server');
+        }
+        
+        if (!config.liffId) {
+          throw new Error('LIFF ID not configured');
+        }
+
         // Initialize LIFF
-        await liff.init({ liffId: process.env.LIFF_ID || "2007512451-RBO1MpYy" });
+        await liff.init({ liffId: config.liffId });
 
         if (!liff.isLoggedIn()) {
           liff.login();
@@ -206,8 +220,19 @@
 
       } catch (error) {
         console.error('LIFF initialization failed:', error);
+        
+        let errorMessage = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อ';
+        
+        if (error.message.includes('LIFF ID not configured')) {
+          errorMessage = '❌ ระบบยังไม่ได้ตั้งค่า LIFF ID';
+        } else if (error.message.includes('Forbidden')) {
+          errorMessage = '❌ LIFF ID ไม่ถูกต้อง';
+        } else if (error.message.includes('NetworkError')) {
+          errorMessage = '❌ ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+        }
+        
         document.getElementById('errorMessage').style.display = 'block';
-        document.getElementById('errorMessage').textContent = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อ';
+        document.getElementById('errorMessage').textContent = errorMessage;
       }
     }
 

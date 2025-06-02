@@ -59,6 +59,15 @@ app.get('/', (req, res) => {
   res.send('LINE Bot server is running!');
 });
 
+// ✅ เพิ่ม API สำหรับ LIFF configuration
+app.get('/api/liff/config', (req, res) => {
+  res.json({
+    liffId: process.env.LIFF_ID || null,
+    baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+    ready: !!process.env.LIFF_ID
+  });
+});
+
 // ✅ เพิ่ม API สำหรับตรวจสอบ LIFF configuration
 app.get('/api/liff/status', (req, res) => {
   const liffHtmlPath = path.join(__dirname, 'public', 'liff-share.html');
