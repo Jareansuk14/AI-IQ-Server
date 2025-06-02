@@ -254,7 +254,21 @@
         }
 
         // ตรวจสอบว่า shareTargetPicker API ใช้งานได้หรือไม่
-        if (!liff.isApiAvailable('shareTargetPicker')) {
+        if (!liff.isInClient()) {
+          // ถ้าไม่อยู่ใน LINE App ให้เปลี่ยนพฤติกรรม
+          document.getElementById('shareBtn').textContent = '🔗 คัดลอกลิงก์แชร์';
+          document.getElementById('shareBtn').disabled = false;
+          
+          // แสดงข้อความแจ้งเตือน
+          const warningDiv = document.createElement('div');
+          warningDiv.innerHTML = `
+            <div style="background: rgba(255, 165, 0, 0.2); color: #ffa500; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 12px;">
+              ⚠️ กรุณาเปิดใน LINE App เพื่อใช้ Share Target Picker<br>
+              ตอนนี้จะใช้วิธีคัดลอกลิงก์แทน
+            </div>
+          `;
+          document.querySelector('.container').insertBefore(warningDiv, document.getElementById('shareBtn'));
+        } else if (!liff.isApiAvailable('shareTargetPicker')) {
           throw new Error('Share Target Picker API is not available in this context');
         }
 
@@ -281,36 +295,64 @@
             document.getElementById('successMessage').style.display = 'none';
             document.getElementById('errorMessage').style.display = 'none';
 
-            // ตรวจสอบอีกครั้งว่า API ใช้งานได้
-            if (!liff.isApiAvailable('shareTargetPicker')) {
-              throw new Error('Share Target Picker API is not available');
-            }
-
-            // Create share card
-            const shareCard = createReferralShareCard(referralCode);
-            console.log('Share card created:', shareCard);
-            
-            // Share using Share Target Picker
-            console.log('Calling liff.shareTargetPicker...');
-            const result = await liff.shareTargetPicker([shareCard]);
-            console.log('Share result:', result);
-            
-            // Show success
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('successMessage').style.display = 'block';
-            
-            showDebugInfo({
-              action: 'share_success',
-              result: result,
-              timestamp: new Date().toISOString()
-            });
-            
-            // Auto close after 2 seconds
-            setTimeout(() => {
-              if (liff.isInClient()) {
-                liff.closeWindow();
+            if (!liff.isInClient()) {
+              // ถ้าไม่อยู่ใน LINE App ให้คัดลอกลิงก์แทน
+              const shareUrl = `https://line.me/R/ti/p/@033mebpp`;
+              const shareText = `🎁 รับเครดิตฟรี!\n\nใช้รหัสแนะนำ: ${referralCode}\nพิมพ์ "รหัส:${referralCode}" ใน Bot นี้\n\n${shareUrl}`;
+              
+              // คัดลอกข้อความ
+              await navigator.clipboard.writeText(shareText);
+              
+              // Show success
+              document.getElementById('loading').style.display = 'none';
+              document.getElementById('successMessage').style.display = 'block';
+              document.getElementById('successMessage').textContent = '✅ คัดลอกข้อความแชร์แล้ว!';
+              
+              showDebugInfo({
+                action: 'copy_success',
+                shareText: shareText,
+                method: 'clipboard',
+                timestamp: new Date().toISOString()
+              });
+              
+              // เปิด LINE ถ้าเป็นไปได้
+              setTimeout(() => {
+                window.open(shareUrl, '_blank');
+              }, 1000);
+              
+            } else {
+              // ใน LINE App ใช้ Share Target Picker
+              if (!liff.isApiAvailable('shareTargetPicker')) {
+                throw new Error('Share Target Picker API is not available');
               }
-            }, 2000);
+
+              // Create share card
+              const shareCard = createReferralShareCard(referralCode);
+              console.log('Share card created:', shareCard);
+              
+              // Share using Share Target Picker
+              console.log('Calling liff.shareTargetPicker...');
+              const result = await liff.shareTargetPicker([shareCard]);
+              console.log('Share result:', result);
+              
+              // Show success
+              document.getElementById('loading').style.display = 'none';
+              document.getElementById('successMessage').style.display = 'block';
+              
+              showDebugInfo({
+                action: 'share_success',
+                result: result,
+                method: 'shareTargetPicker',
+                timestamp: new Date().toISOString()
+              });
+              
+              // Auto close after 2 seconds
+              setTimeout(() => {
+                if (liff.isInClient()) {
+                  liff.closeWindow();
+                }
+              }, 2000);
+            }
             
           } catch (err) {
             console.error('Share error:', err);
