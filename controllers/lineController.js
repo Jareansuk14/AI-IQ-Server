@@ -180,11 +180,32 @@ const handleSpecialCommand = async (event) => {
       }
     }
     
+    // หลังส่วนนี้
     if (text === 'เติมเครดิต' || text === 'topup' || text === 'เติม') {
       const flexMessage = createCreditPackagesMessage();
       return lineService.replyMessage(event.replyToken, flexMessage);
     }
-    
+
+    // 🎧 เพิ่มส่วนนี้
+    if (text === 'support' || text === 'ซัพพอร์ต' || text === 'ติดต่อ' || 
+        text === 'ติดต่อซัพพอร์ต' || text === 'help' || text === 'ช่วยเหลือ' || 
+        text === 'admin' || text === 'แอดมิน' || text === 'customer service' || 
+        text === 'cs' || text === 'แจ้งปัญหา' || text === 'ปัญหา') {
+      try {
+        const supportCard = createSupportContactMessage();
+        return lineService.replyMessage(event.replyToken, supportCard);
+      } catch (error) {
+        console.error('Error creating support contact card:', error);
+        
+        // 📝 Fallback เป็นข้อความธรรมดา
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '🎧 ติดต่อทีมซัพพอร์ต\n\n💬 แอดเพื่อน: @Lovebest14\n⏰ เวลาทำการ: 09:00-18:00 น.\n📅 จันทร์-เสาร์\n⚡ ตอบกลับเร็วภายใน 1 ชั่วโมง\n\n🔧 ช่วยเหลือ:\n• ปัญหาการใช้งานบอท\n• การชำระเงินและเครดิต\n• ข้อสงสัยเกี่ยวกับ AI-Auto\n• การแนะนำและใช้รหัส'
+        });
+      }
+    }
+
+    // ก่อนส่วนนี้
     if (text === 'ai-auto' || text === 'aiauto' || text === 'forex' || text === 'เทรด') {
       const forexMessage = createForexPairsMessage();
       return lineService.replyMessage(event.replyToken, forexMessage);
