@@ -118,6 +118,17 @@
       margin: 20px 0;
       font-weight: bold;
     }
+    
+    .debug-info {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px;
+      border-radius: 8px;
+      margin: 10px 0;
+      font-size: 12px;
+      text-align: left;
+      max-height: 200px;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
@@ -145,22 +156,52 @@
     <div class="error-message" id="errorMessage">
       ❌ แชร์ไม่สำเร็จ กรุณาลองใหม่
     </div>
+    
+    <!-- Debug Info -->
+    <div class="debug-info" id="debugInfo">
+      🔧 Debug Information:<br>
+      กำลังโหลด...
+    </div>
   </div>
 
   <script>
+    function addDebugLog(message) {
+      const debugInfo = document.getElementById('debugInfo');
+      const timestamp = new Date().toLocaleTimeString();
+      debugInfo.innerHTML += `<br>[${timestamp}] ${message}`;
+      debugInfo.scrollTop = debugInfo.scrollHeight;
+      console.log(`[DEBUG] ${message}`);
+    }
+
     async function main() {
       try {
+        addDebugLog('🚀 เริ่มต้น LIFF App');
+        
         // ดึง LIFF config จาก server
+        addDebugLog('📡 กำลังดึง config จาก server...');
         const config = await fetch('/api/liff/config').then(r => r.json());
         
-        // Extract LIFF ID from LIFF_URL (เช่น https://liff.line.me/2007512451-ABCDEFGH)
-        const liffId = config.liffUrl ? config.liffUrl.split('/').pop() : "2007512451-RBO1MpYy";
+        addDebugLog(`📋 Config: ${JSON.stringify(config)}`);
+        
+        // Extract LIFF ID from LIFF_URL
+        const liffId = config.liffUrl ? config.liffUrl.split('/').pop() : "YOUR_LIFF_ID_HERE";
         const botAddUrl = config.botAddUrl || "https://line.me/R/ti/p/@033mebpp";
         
+        addDebugLog(`🆔 LIFF ID: ${liffId}`);
+        addDebugLog(`🤖 Bot URL: ${botAddUrl}`);
+        
         // Initialize LIFF
+        addDebugLog('🔄 กำลัง Initialize LIFF...');
         await liff.init({ liffId: liffId });
+        
+        addDebugLog('✅ LIFF initialized successfully');
+        addDebugLog(`📱 LIFF ready: ${liff.isReady()}`);
+        addDebugLog(`👤 In client: ${liff.isInClient()}`);
+        addDebugLog(`🔐 Logged in: ${liff.isLoggedIn()}`);
+        addDebugLog(`🌐 Context: ${JSON.stringify(liff.getContext())}`);
 
         if (!liff.isLoggedIn()) {
+          addDebugLog('🔐 กำลัง Login...');
           liff.login();
           return;
         }
@@ -169,15 +210,20 @@
         const urlParams = new URLSearchParams(window.location.search);
         const referralCode = urlParams.get('code') || 'DEMO123';
         
+        addDebugLog(`🎯 Referral Code: ${referralCode}`);
+        
         // Display referral code
         document.getElementById('referralCode').textContent = referralCode;
         
         // Enable share button
         const shareBtn = document.getElementById('shareBtn');
         shareBtn.disabled = false;
+        addDebugLog('✅ Share button enabled');
 
         shareBtn.onclick = async () => {
           try {
+            addDebugLog('🚀 กำลังเริ่มการแชร์...');
+            
             // Show loading
             document.getElementById('loading').style.display = 'block';
             shareBtn.disabled = true;
@@ -186,11 +232,22 @@
             document.getElementById('successMessage').style.display = 'none';
             document.getElementById('errorMessage').style.display = 'none';
 
+            // Check LIFF state before sharing
+            addDebugLog(`📊 LIFF State Check:`);
+            addDebugLog(`  - Ready: ${liff.isReady()}`);
+            addDebugLog(`  - In Client: ${liff.isInClient()}`);
+            addDebugLog(`  - Logged In: ${liff.isLoggedIn()}`);
+            
             // Create share card
+            addDebugLog('🎨 กำลังสร้างการ์ดแชร์...');
             const shareCard = createReferralShareCard(referralCode, botAddUrl);
+            addDebugLog(`📄 Share Card Created: ${JSON.stringify(shareCard, null, 2).substring(0, 200)}...`);
             
             // Share using Share Target Picker
+            addDebugLog('📤 กำลังเรียก shareTargetPicker...');
             await liff.shareTargetPicker([shareCard]);
+            
+            addDebugLog('✅ แชร์สำเร็จ!');
             
             // Show success
             document.getElementById('loading').style.display = 'none';
@@ -198,23 +255,29 @@
             
             // Auto close after 2 seconds
             setTimeout(() => {
+              addDebugLog('🚪 กำลังปิดหน้าต่าง...');
               liff.closeWindow();
             }, 2000);
             
           } catch (err) {
-            console.error('Share error:', err);
+            addDebugLog(`❌ Share Error: ${err.message}`);
+            addDebugLog(`❌ Error Code: ${err.code || 'NO_CODE'}`);
+            addDebugLog(`❌ Error Stack: ${err.stack || 'NO_STACK'}`);
+            console.error('Detailed share error:', err);
             
             // Show error
             document.getElementById('loading').style.display = 'none';
             document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorMessage').textContent = `❌ แชร์ไม่สำเร็จ: ${err.message}`;
             shareBtn.disabled = false;
           }
         };
 
       } catch (error) {
+        addDebugLog(`💥 LIFF Init Error: ${error.message}`);
         console.error('LIFF initialization failed:', error);
         document.getElementById('errorMessage').style.display = 'block';
-        document.getElementById('errorMessage').textContent = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อ';
+        document.getElementById('errorMessage').textContent = `❌ เกิดข้อผิดพลาด: ${error.message}`;
       }
     }
 
@@ -266,7 +329,6 @@
             type: "box",
             layout: "vertical",
             contents: [
-              // รหัสแนะนำ
               {
                 type: "box",
                 layout: "vertical",
@@ -286,8 +348,7 @@
                     size: "xxl",
                     color: "#722ed1",
                     align: "center",
-                    margin: "sm",
-                    decoration: "none"
+                    margin: "sm"
                   },
                   {
                     type: "text",
@@ -311,7 +372,6 @@
                 margin: "xl",
                 color: "#303030"
               },
-              // ประโยชน์
               {
                 type: "box",
                 layout: "vertical",
@@ -326,34 +386,6 @@
                   {
                     type: "text",
                     text: "✅ คุณได้ 5 เครดิตฟรี\n✅ เพื่อนได้ 10 เครดิต\n✅ วิเคราะห์รูปภาพด้วย AI\n✅ ระบบ AI-Auto Forex",
-                    color: "#8c8c8c",
-                    size: "xs",
-                    wrap: true,
-                    margin: "sm"
-                  }
-                ],
-                margin: "lg"
-              },
-              {
-                type: "separator",
-                margin: "xl",
-                color: "#303030"
-              },
-              // วิธีใช้
-              {
-                type: "box",
-                layout: "vertical",
-                contents: [
-                  {
-                    type: "text",
-                    text: "📝 วิธีใช้รหัส:",
-                    weight: "bold",
-                    color: "#ffffff",
-                    size: "sm"
-                  },
-                  {
-                    type: "text",
-                    text: "1️⃣ กดปุ่ม \"เริ่มใช้งาน\" ด้านล่าง\n2️⃣ พิมพ์ \"รหัส:" + referralCode + "\"\n3️⃣ รับเครดิตฟรีทันที!",
                     color: "#8c8c8c",
                     size: "xs",
                     wrap: true,
