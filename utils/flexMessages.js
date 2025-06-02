@@ -2883,6 +2883,447 @@ function createWelcomeMessage(referralCode, displayName = 'เพื่อน') 
   };
 }
 
+// เพิ่มในไฟล์ AI-Server/utils/flexMessages.js
+
+// 💎 สร้าง Credit Status Card พร้อมปุ่มติดต่อซัพพอร์ต
+function createCreditStatusMessage(credits, displayName = 'คุณ') {
+  // คำนวณสถานะเครดิต
+  let statusText = '';
+  let statusColor = '';
+  let statusIcon = '';
+  
+  if (credits <= 0) {
+    statusText = 'หมดเครดิต';
+    statusColor = '#a61d24';
+    statusIcon = '⚠️';
+  } else if (credits <= 5) {
+    statusText = 'เหลือน้อย';
+    statusColor = '#d89614';
+    statusIcon = '🔥';
+  } else if (credits <= 20) {
+    statusText = 'ปกติ';
+    statusColor = '#49aa19';
+    statusIcon = '✅';
+  } else {
+    statusText = 'เยอะมาก';
+    statusColor = '#722ed1';
+    statusIcon = '💎';
+  }
+
+  return {
+    type: "flex",
+    altText: `💎 เครดิตคงเหลือ ${credits} เครดิต`,
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "text",
+                text: "💎",
+                size: "xl",
+                color: "#ffffff",
+                flex: 0
+              },
+              {
+                type: "text",
+                text: "สถานะเครดิต",
+                weight: "bold",
+                color: "#ffffff",
+                size: "lg",
+                flex: 4,
+                margin: "md"
+              }
+            ]
+          },
+          {
+            type: "text",
+            text: `ของ ${displayName}`,
+            color: "#ffffff",
+            size: "sm",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        backgroundColor: "#177ddc",
+        paddingAll: "20px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          // เครดิตปัจจุบัน
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: `${credits}`,
+                weight: "bold",
+                size: "xxl",
+                color: "#177ddc",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "เครดิต",
+                size: "lg",
+                color: "#177ddc",
+                align: "center",
+                margin: "none"
+              },
+              {
+                type: "box",
+                layout: "horizontal",
+                contents: [
+                  {
+                    type: "text",
+                    text: statusIcon,
+                    size: "sm",
+                    flex: 0
+                  },
+                  {
+                    type: "text",
+                    text: statusText,
+                    weight: "bold",
+                    color: statusColor,
+                    size: "sm",
+                    flex: 1,
+                    margin: "sm",
+                    align: "center"
+                  }
+                ],
+                margin: "md",
+                justifyContent: "center"
+              }
+            ],
+            spacing: "none",
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // ข้อมูลเพิ่มเติม
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "📊 วิธีรับเครดิตเพิ่ม:",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "🎁",
+                        size: "xs",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "แชร์รหัสแนะนำ = +10 เครดิต/คน",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm",
+                        wrap: true
+                      }
+                    ]
+                  },
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "💰",
+                        size: "xs",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "ซื้อแพ็คเกจ = ราคาเริ่มต้น 10 บาท",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm",
+                        wrap: true
+                      }
+                    ],
+                    margin: "sm"
+                  }
+                ],
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "postback",
+              label: "🎁 แชร์รหัสแนะนำ",
+              data: "action=view_referral_share"
+            },
+            color: "#49aa19",
+            height: "sm"
+          },
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "postback",
+              label: "💰 เติมเครดิต",
+              data: "action=buy_credit_menu"
+            },
+            color: "#177ddc",
+            height: "sm",
+            margin: "sm"
+          },
+          {
+            type: "button",
+            style: "secondary",
+            action: {
+              type: "postback",
+              label: "🎧 ติดต่อซัพพอร์ต",
+              data: "action=contact_support"
+            },
+            height: "sm",
+            margin: "sm"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
+// 🎧 สร้าง Support Contact Card
+function createSupportContactMessage() {
+  return {
+    type: "flex",
+    altText: "🎧 ติดต่อทีมซัพพอร์ต",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "🎧",
+            size: "xxl",
+            align: "center",
+            color: "#ffffff"
+          },
+          {
+            type: "text",
+            text: "ติดต่อทีมซัพพอร์ต",
+            weight: "bold",
+            color: "#ffffff",
+            size: "xl",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        backgroundColor: "#49aa19",
+        paddingAll: "25px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "👋 สวัสดีครับ!",
+            weight: "bold",
+            size: "lg",
+            color: "#49aa19",
+            align: "center",
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "💬 ทีมซัพพอร์ตพร้อมช่วยเหลือ:",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "⏰",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "เวลาทำการ: 09:00 - 18:00 น.",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm"
+                      }
+                    ]
+                  },
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "📅",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "จันทร์ - เสาร์ (ปิดวันอาทิตย์)",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm"
+                      }
+                    ],
+                    margin: "sm"
+                  },
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "⚡",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "ตอบกลับเร็วภายใน 1 ชั่วโมง",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm"
+                      }
+                    ],
+                    margin: "sm"
+                  }
+                ],
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🔧 สิ่งที่เราช่วยได้:",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "text",
+                text: "• ปัญหาการใช้งานบอท\n• การชำระเงินและเครดิต\n• ข้อสงสัยเกี่ยวกับ AI-Auto\n• การแนะนำและใช้รหัส\n• ข้อเสนอแนะต่างๆ",
+                color: "#8c8c8c",
+                size: "xs",
+                wrap: true,
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "uri",
+              label: "💬 แอดเพื่อนซัพพอร์ต",
+              uri: "https://line.me/R/ti/p/@Lovebest14"  // เปลี่ยนเป็น LINE ID ซัพพอร์ตจริง
+            },
+            color: "#49aa19",
+            height: "md"
+          },
+          {
+            type: "text",
+            text: "กดปุ่มด้านบนเพื่อเพิ่มเพื่อนซัพพอร์ต",
+            color: "#8c8c8c",
+            size: "xs",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
@@ -2894,6 +3335,8 @@ module.exports = {
   createReferralShareMessage,
   createReferralInputMessage,
   createReferralSuccessMessage,
-  // 🆕 Welcome Card
-  createWelcomeMessage
+  // Welcome & User Interface Cards
+  createWelcomeMessage,
+  createCreditStatusMessage,
+  createSupportContactMessage
 };

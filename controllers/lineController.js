@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - โค้ดทั้งหมดพร้อม Referral Cards (ตัดฟังก์ชันสถิติออก)
+// AI-Server/controllers/lineController.js - โค้ดทั้งหมดพร้อม Referral Cards และ Credit/Support Cards
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -12,11 +12,14 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  // เพิ่ม Referral Cards + Welcome Card
+  // Referral Cards
   createReferralShareMessage,
   createReferralInputMessage,
   createReferralSuccessMessage,
-  createWelcomeMessage  // 🆕 เพิ่มฟังก์ชันใหม่
+  // Welcome & UI Cards
+  createWelcomeMessage,
+  createCreditStatusMessage,
+  createSupportContactMessage
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -87,7 +90,7 @@ const saveOrUpdateUser = async (lineUserId, profile) => {
   }
 };
 
-// ส่งข้อความต้อนรับสำหรับผู้ใช้ใหม่
+// ส่งข้อความต้อนรับสำหรับผู้ใช้ใหม่ - อัปเดตเป็น Flex Card
 const sendWelcomeMessage = async (userId, referralCode, profile = null) => {
   try {
     const displayName = profile?.displayName || 'เพื่อน';
@@ -117,7 +120,6 @@ const sendWelcomeMessage = async (userId, referralCode, profile = null) => {
   }
 };
 
-
 // บันทึกข้อมูลการโต้ตอบ
 const saveInteraction = async (user, command, imageId, aiResponse, processingTime) => {
   try {
@@ -138,7 +140,7 @@ const saveInteraction = async (user, command, imageId, aiResponse, processingTim
   }
 };
 
-// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ - อัปเดตพร้อม Referral Cards
+// ฟังก์ชันสำหรับตรวจสอบคำสั่งพิเศษ - อัปเดตพร้อม Credit Card และ Referral Cards
 const handleSpecialCommand = async (event) => {
   const text = event.message.text.trim().toLowerCase();
   const userId = event.source.userId;
@@ -156,12 +158,26 @@ const handleSpecialCommand = async (event) => {
       return true;
     }
 
+    // 💎 อัปเดตการเช็คเครดิตให้ใช้ Flex Card
     if (text === 'เครดิต' || text === 'credit' || text === 'เช็คเครดิต') {
-      const credits = await creditService.checkCredit(userId);
-      return lineService.replyMessage(event.replyToken, {
-        type: 'text',
-        text: `💎 คุณมีเครดิตคงเหลือ ${credits} เครดิต\n\n🔄 สามารถแนะนำเพื่อนเพื่อรับเครดิตเพิ่มได้โดยกดที่ปุ่ม "แชร์เพื่อรับเครดิต"\n\n💰 หรือเติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง`
-      });
+      try {
+        const credits = await creditService.checkCredit(userId);
+        const profile = await lineService.getUserProfile(userId);
+        const displayName = profile?.displayName || 'คุณ';
+        
+        // 🎨 ใช้ Credit Status Card แทนข้อความธรรมดา
+        const creditCard = createCreditStatusMessage(credits, displayName);
+        return lineService.replyMessage(event.replyToken, creditCard);
+      } catch (error) {
+        console.error('Error creating credit status card:', error);
+        
+        // 📝 Fallback เป็นข้อความธรรมดา
+        const credits = await creditService.checkCredit(userId);
+        return lineService.replyMessage(event.replyToken, {
+          type: 'text',
+          text: `💎 คุณมีเครดิตคงเหลือ ${credits} เครดิต\n\n🔄 สามารถแนะนำเพื่อนเพื่อรับเครดิตเพิ่มได้โดยกดที่ปุ่ม "แชร์เพื่อรับเครดิต"\n\n💰 หรือเติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง`
+        });
+      }
     }
     
     if (text === 'เติมเครดิต' || text === 'topup' || text === 'เติม') {
@@ -267,7 +283,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Referral Actions (ตัดฟังก์ชันสถิติออก)
+// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Support และ Credit Menu
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -278,12 +294,38 @@ const handlePostbackEvent = async (event) => {
     console.log('Handling postback event:', action, data);
     
     if (resultTrackingService.isUserBlocked(userId) && 
-        !['continue_trading', 'stop_trading', 'view_referral_share'].includes(action)) {
+        !['continue_trading', 'stop_trading', 'view_referral_share', 'contact_support', 'buy_credit_menu'].includes(action)) {
       await resultTrackingService.handleBlockedUserMessage(userId);
       return;
     }
     
     switch (action) {
+      // 🎧 Support Contact
+      case 'contact_support':
+        try {
+          const supportCard = createSupportContactMessage();
+          return lineService.replyMessage(event.replyToken, supportCard);
+        } catch (error) {
+          console.error('Error showing support contact:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '🎧 ติดต่อทีมซัพพอร์ต\n\n💬 แอดเพื่อน: @support123\n⏰ เวลาทำการ: 09:00-18:00 น.\n📅 จันทร์-เสาร์'
+          });
+        }
+
+      // 💰 Credit Menu (แยกจาก buy_credit เพื่อความชัดเจน)
+      case 'buy_credit_menu':
+        try {
+          const flexMessage = createCreditPackagesMessage();
+          return lineService.replyMessage(event.replyToken, flexMessage);
+        } catch (error) {
+          console.error('Error showing credit packages:', error);
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '💎 เติมเครดิต\n\n📦 แพ็คเกจ:\n• 1 เครดิต = 10 บาท\n• 10 เครดิต = 100 บาท\n• 20 เครดิต = 200 บาท\n• 50 เครดิต = 500 บาท\n• 100 เครดิต = 1,000 บาท'
+          });
+        }
+
       case 'buy_credit':
         const packageType = params.get('package');
         
@@ -439,7 +481,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
         
-      // 🆕 เคสใหม่สำหรับ Referral System (ตัด view_referral_stats ออก)
+      // 🆕 เคสใหม่สำหรับ Referral System
       case 'view_referral_share':
         try {
           const referralStats = await creditService.getReferralSummary(userId);
@@ -487,7 +529,7 @@ const handlePostbackEvent = async (event) => {
   }
 };
 
-// ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน)
+// ฟังก์ชันจัดการเหตุการณ์ follow (เพิ่มเพื่อน) - อัปเดตให้ส่ง profile
 const handleFollowEvent = async (event) => {
   try {
     console.log('Handling follow event:', event);
