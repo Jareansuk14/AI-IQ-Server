@@ -3302,7 +3302,7 @@ function createSupportContactMessage() {
             action: {
               type: "uri",
               label: "💬 แอดเพื่อนซัพพอร์ต",
-              uri: "https://line.me/ti/p/0QuIgXRN8Y"  // เปลี่ยนเป็น LINE ID ซัพพอร์ตจริง
+              uri: "https://line.me/ti/p/@318vttpx"  // เปลี่ยนเป็น LINE ID ซัพพอร์ตจริง
             },
             color: "#49aa19",
             height: "md"
