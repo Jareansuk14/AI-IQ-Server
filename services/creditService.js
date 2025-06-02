@@ -1,4 +1,4 @@
-//AI-Server/services/creditService.js - โค้ดทั้งหมดพร้อม Referral System
+//AI-Server/services/creditService.js - โค้ดทั้งหมดพร้อม Referral System (ตัดฟังก์ชันสถิติออก)
 const User = require('../models/user');
 const CreditTransaction = require('../models/creditTransaction');
 const lineService = require('./lineService');
@@ -353,7 +353,7 @@ class CreditService {
     }
   }
 
-  // === ฟังก์ชันใหม่สำหรับ Referral System Cards ===
+  // === ฟังก์ชันใหม่สำหรับ Referral System Cards (ตัดฟังก์ชันสถิติออก) ===
 
   // ดึงสถิติการแนะนำแบบสรุป (สำหรับการ์ดแชร์)
   async getReferralSummary(userId) {
@@ -387,124 +387,6 @@ class CreditService {
       };
     } catch (error) {
       console.error('Error getting referral summary:', error);
-      throw error;
-    }
-  }
-
-  // ดึงสถิติการแนะนำแบบละเอียด (สำหรับการ์ดสถิติ)
-  async getReferralDetailedStats(userId) {
-    try {
-      const user = await User.findOne({ lineUserId: userId });
-      if (!user) {
-        throw new Error('ไม่พบผู้ใช้');
-      }
-
-      const referralCode = user.referralCode;
-
-      // สถิติพื้นฐาน
-      const totalReferred = await User.countDocuments({ 
-        referredBy: referralCode 
-      });
-
-      const earnedFromReferrals = await CreditTransaction.aggregate([
-        { 
-          $match: { 
-            user: user._id,
-            type: 'referral'
-          }
-        },
-        { $group: { _id: null, total: { $sum: "$amount" } }}
-      ]);
-      const totalEarned = earnedFromReferrals[0]?.total || 0;
-
-      // ดึงเพื่อนที่แนะนำล่าสุด 5 คน
-      const recentReferrals = await User.find({ referredBy: referralCode })
-        .sort({ firstInteraction: -1 })
-        .limit(5)
-        .select('displayName firstInteraction lineUserId');
-
-      // สถิติรายเดือน
-      const now = new Date();
-      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-
-      const thisMonthCount = await User.countDocuments({
-        referredBy: referralCode,
-        firstInteraction: { $gte: thisMonth }
-      });
-
-      const lastMonthCount = await User.countDocuments({
-        referredBy: referralCode,
-        firstInteraction: { $gte: lastMonth, $lt: thisMonth }
-      });
-
-      // คำนวณอันดับ (จากผู้ใช้ที่แนะนำมากสุด)
-      const topReferrers = await User.aggregate([
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'referralCode',
-            foreignField: 'referredBy',
-            as: 'referredUsers'
-          }
-        },
-        {
-          $addFields: {
-            referralCount: { $size: '$referredUsers' }
-          }
-        },
-        {
-          $sort: { referralCount: -1 }
-        },
-        {
-          $group: {
-            _id: null,
-            users: { $push: { userId: '$lineUserId', count: '$referralCount' } }
-          }
-        }
-      ]);
-
-      let ranking = 0;
-      if (topReferrers[0]) {
-        const userIndex = topReferrers[0].users.findIndex(u => u.userId === userId);
-        ranking = userIndex >= 0 ? userIndex + 1 : 0;
-      }
-
-      // การเติบโตรายสัปดาห์ (7 วันที่ผ่านมา)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const weeklyGrowth = await User.countDocuments({
-        referredBy: referralCode,
-        firstInteraction: { $gte: sevenDaysAgo }
-      });
-
-      return {
-        referralCode,
-        totalReferred,
-        totalEarned,
-        recentReferrals: recentReferrals.map(r => ({
-          name: r.displayName || 'เพื่อน',
-          date: r.firstInteraction.toLocaleDateString('th-TH', {
-            year: '2-digit',
-            month: '2-digit', 
-            day: '2-digit'
-          }),
-          lineUserId: r.lineUserId
-        })),
-        monthlyStats: {
-          thisMonth: thisMonthCount,
-          lastMonth: lastMonthCount
-        },
-        ranking: ranking > 0 ? ranking : null,
-        weeklyGrowth,
-        // เพิ่มข้อมูลเพื่อการแสดงผล
-        growthRate: lastMonthCount > 0 ? 
-          ((thisMonthCount - lastMonthCount) / lastMonthCount * 100).toFixed(1) : 
-          (thisMonthCount > 0 ? '100' : '0')
-      };
-    } catch (error) {
-      console.error('Error getting detailed referral stats:', error);
       throw error;
     }
   }
@@ -683,7 +565,7 @@ class CreditService {
     }
   }
 
-  // === ฟังก์ชันเพิ่มเติมสำหรับ Analytics ===
+  // === ฟังก์ชันเพิ่มเติมสำหรับ Analytics (เก็บไว้สำหรับ Admin) ===
 
   // ดูการเติบโตของ referral รายวัน
   async getReferralDailyGrowth(days = 30) {

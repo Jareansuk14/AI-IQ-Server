@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - โค้ดทั้งหมดพร้อม Referral Cards
+// AI-Server/controllers/lineController.js - โค้ดทั้งหมดพร้อม Referral Cards (ตัดฟังก์ชันสถิติออก)
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -12,10 +12,9 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  // เพิ่ม Referral Cards
+  // เพิ่ม Referral Cards (ตัด createReferralStatsMessage ออก)
   createReferralShareMessage,
   createReferralInputMessage,
-  createReferralStatsMessage,
   createReferralSuccessMessage
 } = require('../utils/flexMessages');
 const User = require('../models/user');
@@ -250,7 +249,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Referral Actions
+// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Referral Actions (ตัดฟังก์ชันสถิติออก)
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -261,7 +260,7 @@ const handlePostbackEvent = async (event) => {
     console.log('Handling postback event:', action, data);
     
     if (resultTrackingService.isUserBlocked(userId) && 
-        !['continue_trading', 'stop_trading', 'view_referral_share', 'view_referral_stats'].includes(action)) {
+        !['continue_trading', 'stop_trading', 'view_referral_share'].includes(action)) {
       await resultTrackingService.handleBlockedUserMessage(userId);
       return;
     }
@@ -422,7 +421,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
         
-      // 🆕 เคสใหม่สำหรับ Referral System
+      // 🆕 เคสใหม่สำหรับ Referral System (ตัด view_referral_stats ออก)
       case 'view_referral_share':
         try {
           const referralStats = await creditService.getReferralSummary(userId);
@@ -437,19 +436,6 @@ const handlePostbackEvent = async (event) => {
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
             text: '❌ เกิดข้อผิดพลาดในการแสดงข้อมูลการแนะนำ'
-          });
-        }
-        
-      case 'view_referral_stats':
-        try {
-          const detailedStats = await creditService.getReferralDetailedStats(userId);
-          const statsCard = createReferralStatsMessage(detailedStats);
-          return lineService.replyMessage(event.replyToken, statsCard);
-        } catch (error) {
-          console.error('Error showing referral stats:', error);
-          return lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '❌ เกิดข้อผิดพลาดในการแสดงสถิติ'
           });
         }
         
