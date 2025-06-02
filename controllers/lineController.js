@@ -12,10 +12,11 @@ const {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  // เพิ่ม Referral Cards (ตัด createReferralStatsMessage ออก)
+  // เพิ่ม Referral Cards + Welcome Card
   createReferralShareMessage,
   createReferralInputMessage,
-  createReferralSuccessMessage
+  createReferralSuccessMessage,
+  createWelcomeMessage  // 🆕 เพิ่มฟังก์ชันใหม่
 } = require('../utils/flexMessages');
 const User = require('../models/user');
 const Interaction = require('../models/interaction');
@@ -87,18 +88,35 @@ const saveOrUpdateUser = async (lineUserId, profile) => {
 };
 
 // ส่งข้อความต้อนรับสำหรับผู้ใช้ใหม่
-const sendWelcomeMessage = async (userId, referralCode) => {
+const sendWelcomeMessage = async (userId, referralCode, profile = null) => {
   try {
-    await lineService.pushMessage(userId, {
-      type: 'text',
-      text: `🎊 ยินดีต้อนรับสู่บริการวิเคราะห์รูปภาพ AI!\n\n✨ คุณได้รับ 10 เครดิตเริ่มต้นฟรี\n\n📝 รหัสแนะนำของคุณคือ: ${referralCode}\n\n💡 ใช้รหัสแนะนำจากเพื่อนเพื่อรับเพิ่มอีก 5 เครดิต หรือแนะนำเพื่อนเพื่อรับ 10 เครดิตต่อการแนะนำ 1 คน\n\n📸 ส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!\n\n💎 เติมเครดิตเพิ่มได้ที่เมนูด้านล่าง`
-    });
+    const displayName = profile?.displayName || 'เพื่อน';
+    
+    // 🎊 ใช้ Welcome Flex Card แทนข้อความธรรมดา
+    const welcomeCard = createWelcomeMessage(referralCode, displayName);
+    
+    await lineService.pushMessage(userId, welcomeCard);
+    
+    console.log(`✅ Welcome card sent to user: ${userId} (${displayName})`);
     return true;
   } catch (error) {
-    console.error('Error sending welcome message:', error);
-    return false;
+    console.error('Error sending welcome card:', error);
+    
+    // 📝 Fallback เป็นข้อความธรรมดาในกรณีที่ Flex Card ไม่ทำงาน
+    try {
+      await lineService.pushMessage(userId, {
+        type: 'text',
+        text: `🎊 ยินดีต้อนรับสู่บริการวิเคราะห์รูปภาพ AI!\n\n✨ คุณได้รับ 10 เครดิตเริ่มต้นฟรี\n\n📝 รหัสแนะนำของคุณคือ: ${referralCode}\n\n💡 ใช้รหัสแนะนำจากเพื่อนเพื่อรับเพิ่มอีก 5 เครดิต หรือแนะนำเพื่อนเพื่อรับ 10 เครดิตต่อการแนะนำ 1 คน\n\n📸 ส่งรูปภาพเพื่อให้ AI วิเคราะห์ได้เลย!\n\n💎 เติมเครดิตเพิ่มได้ที่เมนูด้านล่าง`
+      });
+      console.log(`✅ Fallback welcome text sent to user: ${userId}`);
+      return true;
+    } catch (fallbackError) {
+      console.error('Error sending fallback welcome message:', fallbackError);
+      return false;
+    }
   }
 };
+
 
 // บันทึกข้อมูลการโต้ตอบ
 const saveInteraction = async (user, command, imageId, aiResponse, processingTime) => {
@@ -478,8 +496,10 @@ const handleFollowEvent = async (event) => {
     
     const { user, isNewUser } = await saveOrUpdateUser(event.source.userId, profile);
     
-    await sendWelcomeMessage(event.source.userId, user.referralCode);
+    // 🆕 ส่ง profile ไปด้วยเพื่อให้ Welcome Card แสดงชื่อได้
+    await sendWelcomeMessage(event.source.userId, user.referralCode, profile);
     
+    console.log(`Follow event handled for user: ${profile?.displayName || event.source.userId}`);
     return true;
   } catch (error) {
     console.error('Error handling follow event:', error);

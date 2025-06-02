@@ -2650,7 +2650,324 @@ function createReferralSuccessMessage(referrerData, referredData) {
   };
 }
 
-// อัปเดต module.exports (ตัด createReferralStatsMessage ออก)
+function createWelcomeMessage(referralCode, displayName = 'เพื่อน') {
+  return {
+    type: "flex",
+    altText: "🎊 ยินดีต้อนรับสู่ AI Bot!",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "box",
+            layout: "horizontal",
+            contents: [
+              {
+                type: "text",
+                text: "🎊",
+                size: "xxl",
+                color: "#ffffff",
+                flex: 0
+              },
+              {
+                type: "text",
+                text: "ยินดีต้อนรับ!",
+                weight: "bold",
+                color: "#ffffff",
+                size: "xl",
+                flex: 4,
+                margin: "md"
+              }
+            ]
+          },
+          {
+            type: "text",
+            text: `สวัสดี ${displayName} 👋`,
+            color: "#ffffff",
+            size: "md",
+            align: "center",
+            margin: "md"
+          }
+        ],
+        backgroundColor: "#722ed1",
+        paddingAll: "25px"
+      },
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          // เครดิตฟรี
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🎁 ของขวัญต้อนรับ",
+                weight: "bold",
+                size: "lg",
+                color: "#49aa19",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "+10",
+                weight: "bold",
+                size: "xxl",
+                color: "#49aa19",
+                align: "center",
+                margin: "sm"
+              },
+              {
+                type: "text",
+                text: "เครดิตฟรี",
+                size: "md",
+                color: "#49aa19",
+                align: "center",
+                margin: "none"
+              }
+            ],
+            spacing: "none",
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // รหัสแนะนำ
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🏷️ รหัสแนะนำของคุณ",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm",
+                align: "center"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: referralCode,
+                    weight: "bold",
+                    size: "xl",
+                    color: "#177ddc",
+                    align: "center",
+                    decoration: "none"
+                  }
+                ],
+                backgroundColor: "#262626",
+                cornerRadius: "8px",
+                paddingAll: "12px",
+                margin: "sm",
+                action: {
+                  type: "clipboard",
+                  clipboardText: referralCode
+                }
+              },
+              {
+                type: "text",
+                text: "👆 แตะเพื่อคัดลอก",
+                size: "xs",
+                color: "#8c8c8c",
+                align: "center",
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // ฟีเจอร์
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "✨ สิ่งที่คุณทำได้:",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm"
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "📸",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "ส่งรูปภาพให้ AI วิเคราะห์",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm",
+                        wrap: true
+                      }
+                    ]
+                  },
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "📈",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "ใช้ AI-Auto สำหรับ Forex",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm",
+                        wrap: true
+                      }
+                    ],
+                    margin: "sm"
+                  },
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "👥",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "แนะนำเพื่อนรับ 10 เครดิต/คน",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm",
+                        wrap: true
+                      }
+                    ],
+                    margin: "sm"
+                  },
+                  {
+                    type: "box",
+                    layout: "baseline",
+                    contents: [
+                      {
+                        type: "text",
+                        text: "💎",
+                        size: "sm",
+                        flex: 0
+                      },
+                      {
+                        type: "text",
+                        text: "ใช้รหัสเพื่อนรับ 5 เครดิต",
+                        color: "#8c8c8c",
+                        size: "xs",
+                        flex: 4,
+                        margin: "sm",
+                        wrap: true
+                      }
+                    ],
+                    margin: "sm"
+                  }
+                ],
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          },
+          {
+            type: "separator",
+            margin: "xl",
+            color: "#303030"
+          },
+          // เริ่มใช้งาน
+          {
+            type: "box",
+            layout: "vertical",
+            contents: [
+              {
+                type: "text",
+                text: "🚀 พร้อมเริ่มต้นแล้ว!",
+                weight: "bold",
+                color: "#ffffff",
+                size: "sm",
+                align: "center"
+              },
+              {
+                type: "text",
+                text: "ส่งรูปภาพเพื่อให้ AI วิเคราะห์ หรือพิมพ์ \"AI-Auto\" เพื่อเทรด Forex",
+                color: "#8c8c8c",
+                size: "xs",
+                wrap: true,
+                align: "center",
+                margin: "sm"
+              }
+            ],
+            margin: "lg"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            action: {
+              type: "postback",
+              label: "🎁 แชร์รหัสแนะนำ",
+              data: "action=view_referral_share"
+            },
+            color: "#722ed1",
+            height: "md"
+          },
+          {
+            type: "button",
+            style: "secondary",
+            action: {
+              type: "postback",
+              label: "💎 ใช้รหัสเพื่อน",
+              data: "action=share_to_get_referral"
+            },
+            height: "sm",
+            margin: "sm"
+          }
+        ],
+        spacing: "sm",
+        paddingAll: "20px",
+        backgroundColor: "#1f1f1f"
+      }
+    }
+  };
+}
+
 module.exports = {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
@@ -2658,8 +2975,10 @@ module.exports = {
   createForexPairsMessage,
   calculateNextTimeSlot,
   createContinueTradeMessage,
-  // เพิ่มฟังก์ชัน Referral ใหม่ (ตัดฟังก์ชันสถิติออก)
+  // Referral System Cards
   createReferralShareMessage,
   createReferralInputMessage,
-  createReferralSuccessMessage
+  createReferralSuccessMessage,
+  // 🆕 Welcome Card
+  createWelcomeMessage
 };
