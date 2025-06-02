@@ -195,10 +195,24 @@
         await liff.init({ liffId: liffId });
         
         addDebugLog('✅ LIFF initialized successfully');
-        addDebugLog(`📱 LIFF ready: ${liff.isReady()}`);
         addDebugLog(`👤 In client: ${liff.isInClient()}`);
         addDebugLog(`🔐 Logged in: ${liff.isLoggedIn()}`);
-        addDebugLog(`🌐 Context: ${JSON.stringify(liff.getContext())}`);
+        
+        // ปลอดภัยกว่าถ้าตรวจสอบ context แบบ try-catch
+        try {
+          const context = liff.getContext();
+          addDebugLog(`🌐 Context: ${JSON.stringify(context)}`);
+        } catch (e) {
+          addDebugLog(`🌐 Context: ไม่สามารถดึงได้ (${e.message})`);
+        }
+
+        // ตรวจสอบว่าอยู่ใน LINE App หรือไม่
+        if (!liff.isInClient()) {
+          addDebugLog('⚠️ กำลังใช้งานใน Browser ไม่ใช่ LINE App');
+          addDebugLog('💡 การแชร์ใน Browser อาจมีข้อจำกัด');
+        } else {
+          addDebugLog('✅ กำลังใช้งานใน LINE App');
+        }
 
         if (!liff.isLoggedIn()) {
           addDebugLog('🔐 กำลัง Login...');
@@ -234,9 +248,13 @@
 
             // Check LIFF state before sharing
             addDebugLog(`📊 LIFF State Check:`);
-            addDebugLog(`  - Ready: ${liff.isReady()}`);
             addDebugLog(`  - In Client: ${liff.isInClient()}`);
             addDebugLog(`  - Logged In: ${liff.isLoggedIn()}`);
+            
+            // ตรวจสอบว่าอยู่ใน LINE App หรือไม่
+            if (!liff.isInClient()) {
+              addDebugLog('⚠️ ไม่ได้อยู่ใน LINE App - อาจไม่สามารถแชร์ได้');
+            }
             
             // Create share card
             addDebugLog('🎨 กำลังสร้างการ์ดแชร์...');
@@ -245,6 +263,8 @@
             
             // Share using Share Target Picker
             addDebugLog('📤 กำลังเรียก shareTargetPicker...');
+            addDebugLog('💡 หน้าต่างจะเปิดขึ้นให้เลือกเพื่อน...');
+            
             await liff.shareTargetPicker([shareCard]);
             
             addDebugLog('✅ แชร์สำเร็จ!');
@@ -263,6 +283,16 @@
             addDebugLog(`❌ Share Error: ${err.message}`);
             addDebugLog(`❌ Error Code: ${err.code || 'NO_CODE'}`);
             addDebugLog(`❌ Error Stack: ${err.stack || 'NO_STACK'}`);
+            
+            // ตรวจสอบ error ที่เป็นไปได้
+            if (err.message.includes('LIFF_NOT_SUPPORTED')) {
+              addDebugLog('💡 Suggestion: LIFF ไม่รองรับในสภาพแวดล้อมนี้');
+            } else if (err.message.includes('FORBIDDEN_FEATURE')) {
+              addDebugLog('💡 Suggestion: ตรวจสอบ Bot link feature ใน LIFF Console');
+            } else if (err.message.includes('UNAUTHORIZED')) {
+              addDebugLog('💡 Suggestion: ตรวจสอบการตั้งค่า Scope ใน LIFF Console');
+            }
+            
             console.error('Detailed share error:', err);
             
             // Show error
