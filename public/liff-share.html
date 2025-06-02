@@ -154,7 +154,7 @@
         const config = await fetch('/api/liff/config').then(r => r.json());
         
         // Extract LIFF ID from LIFF_URL (เช่น https://liff.line.me/2007512451-ABCDEFGH)
-        const liffId = config.liffUrl ? config.liffUrl.split('/').pop() : "YOUR_LIFF_ID_HERE";
+        const liffId = config.liffUrl ? config.liffUrl.split('/').pop() : "2007512451-RBO1MpYy";
         const botAddUrl = config.botAddUrl || "https://line.me/R/ti/p/@033mebpp";
         
         // Initialize LIFF
