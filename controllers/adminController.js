@@ -502,7 +502,7 @@ const getCreditStats = async (req, res) => {
       },
       { $group: { _id: null, totalUsed: { $sum: { $abs: "$amount" } } }}
     ]);
-    const totalCreditsUsed = totalUsedResult[0]?.totalUsed || 0;
+    const totalUsed = totalUsedResult[0]?.totalUsed || 0;
 
     // เครดิตที่เพิ่มโดยแอดมินทั้งหมด
     const adminAddedResult = await CreditTransaction.aggregate([
@@ -514,7 +514,29 @@ const getCreditStats = async (req, res) => {
       },
       { $group: { _id: null, totalAdded: { $sum: "$amount" } }}
     ]);
-    const totalAdminAdded = adminAddedResult[0]?.totalAdded || 0;
+    const addedByAdmin = adminAddedResult[0]?.totalAdded || 0;
+
+    // === เพิ่มการคำนวณ "ใช้วันนี้" ===
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const usedTodayResult = await CreditTransaction.aggregate([
+      { 
+        $match: { 
+          type: 'use',
+          amount: { $lt: 0 },
+          createdAt: {
+            $gte: startOfToday,
+            $lte: endOfToday
+          }
+        }
+      },
+      { $group: { _id: null, usedToday: { $sum: { $abs: "$amount" } } }}
+    ]);
+    const usedToday = usedTodayResult[0]?.usedToday || 0;
 
     // การแจกแจงผู้ใช้ตามจำนวนเครดิต
     const creditDistribution = await User.aggregate([
@@ -561,11 +583,13 @@ const getCreditStats = async (req, res) => {
       }}
     ]);
 
+    // === ปรับ Response ให้ตรงกับ Frontend ===
     res.json({
       totalCredits,
-      totalCreditsUsed,
-      totalAdminAdded,
-      totalCreditsInCirculation: totalCredits + totalCreditsUsed,
+      totalUsed,        // เปลี่ยนจาก totalCreditsUsed
+      addedByAdmin,     // เปลี่ยนจาก totalAdminAdded
+      usedToday,        // เพิ่มใหม่
+      totalCreditsInCirculation: totalCredits + totalUsed,
       creditDistribution,
       topAdmins,
       usersCount: {
