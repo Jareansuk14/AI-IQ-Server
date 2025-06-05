@@ -21,7 +21,7 @@ app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 // เพิ่มการตั้งค่า CORS ที่เฉพาะเจาะจงมากขึ้น
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://your-frontend-url.com', '*'],
+  origin: ['http://localhost:3000', 'https://ai-iq-admin.vercel.app', '*'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Line-Signature'],
   credentials: true
