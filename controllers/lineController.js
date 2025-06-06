@@ -180,13 +180,13 @@ const handleSpecialCommand = async (event) => {
       }
     }
     
-    // หลังส่วนนี้
+    // เติมเครดิต
     if (text === 'เติมเครดิต' || text === 'topup' || text === 'เติม') {
       const flexMessage = createCreditPackagesMessage();
       return lineService.replyMessage(event.replyToken, flexMessage);
     }
 
-    // 🎧 เพิ่มส่วนนี้
+    // 🎧 ซัพพอร์ต
     if (text === 'support' || text === 'ซัพพอร์ต' || text === 'ติดต่อ' || 
         text === 'ติดต่อซัพพอร์ต' || text === 'help' || text === 'ช่วยเหลือ' || 
         text === 'admin' || text === 'แอดมิน' || text === 'customer service' || 
@@ -200,12 +200,12 @@ const handleSpecialCommand = async (event) => {
         // 📝 Fallback เป็นข้อความธรรมดา
         return lineService.replyMessage(event.replyToken, {
           type: 'text',
-          text: '🎧 ติดต่อทีมซัพพอร์ต\n\n💬 แอดเพื่อน: @Lovebest14\n⏰ เวลาทำการ: 09:00-18:00 น.\n📅 จันทร์-เสาร์\n⚡ ตอบกลับเร็วภายใน 1 ชั่วโมง\n\n🔧 ช่วยเหลือ:\n• ปัญหาการใช้งานบอท\n• การชำระเงินและเครดิต\n• ข้อสงสัยเกี่ยวกับ AI-Auto\n• การแนะนำและใช้รหัส'
+          text: '🎧 ติดต่อทีมซัพพอร์ต\n\n💬 แอดเพื่อน: @318vttpx\n⏰ เวลาทำการ: 09:00-18:00 น.\n📅 จันทร์-เสาร์\n⚡ ตอบกลับเร็วภายใน 1 ชั่วโมง\n\n🔧 ช่วยเหลือ:\n• ปัญหาการใช้งานบอท\n• การชำระเงินและเครดิต\n• ข้อสงสัยเกี่ยวกับ AI-Auto\n• การแนะนำและใช้รหัส'
         });
       }
     }
 
-    // ก่อนส่วนนี้
+    // AI-Auto / Forex
     if (text === 'ai-auto' || text === 'aiauto' || text === 'forex' || text === 'เทรด') {
       const forexMessage = createForexPairsMessage();
       return lineService.replyMessage(event.replyToken, forexMessage);
@@ -330,7 +330,7 @@ const handlePostbackEvent = async (event) => {
           console.error('Error showing support contact:', error);
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: '🎧 ติดต่อทีมซัพพอร์ต\n\n💬 แอดเพื่อน: @support123\n⏰ เวลาทำการ: 09:00-18:00 น.\n📅 จันทร์-เสาร์'
+            text: '🎧 ติดต่อทีมซัพพอร์ต\n\n💬 แอดเพื่อน: @318vttpx\n⏰ เวลาทำการ: 09:00-18:00 น.\n📅 จันทร์-เสาร์'
           });
         }
 
@@ -388,7 +388,7 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // การวิเคราะห์ Forex ด้วย Technical Analysis
+      // การวิเคราะห์ Forex ด้วย Technical Analysis - ปรับปรุงให้ใช้ Flex Message เดียว
       case 'forex_analysis':
         const forexPair = params.get('pair');
         
@@ -432,14 +432,6 @@ const handlePostbackEvent = async (event) => {
           // ตรวจสอบเครดิตคงเหลือ
           const remainingCredits = await creditService.checkCredit(userId);
           
-          // สร้างข้อความแบบใหม่ด้วย Technical Analysis
-          const responseText = aiService.formatForexResponse(
-            analysisResult,
-            forexPair,
-            targetTime,
-            remainingCredits
-          );
-          
           console.log('📤 Sending technical analysis response');
           
           // URL ของรูปภาพตามการทำนาย
@@ -447,20 +439,167 @@ const handlePostbackEvent = async (event) => {
           const imageFileName = analysisResult.signal === 'CALL' ? 'call-signal.jpg' : 'put-signal.jpg';
           const imageUrl = `${baseURL}/images/${imageFileName}`;
           
-          // ส่งผลลัพธ์ (ใช้ pushMessage เพราะ replyToken ใช้ไปแล้ว)
-          await lineService.pushMessage(userId, [
-            // ส่งรูปภาพก่อน
-            {
-              type: 'image',
-              originalContentUrl: imageUrl,
-              previewImageUrl: imageUrl
-            },
-            // ตามด้วยข้อความ
-            {
-              type: 'text',
-              text: responseText
+          // รอ 2 วินาทีก่อนส่งผลลัพธ์ (ให้เวลาระบบประมวลผล)
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // สร้าง Flex Message ที่รวมรูปภาพและข้อความเป็นอันเดียว
+          const forexResultMessage = {
+            type: 'flex',
+            altText: `📊 ผลวิเคราะห์ ${forexPair} - สัญญาณ ${analysisResult.signal}`,
+            contents: {
+              type: 'bubble',
+              hero: {
+                type: 'image',
+                url: imageUrl,
+                size: 'full',
+                aspectRatio: '20:13',
+                aspectMode: 'cover'
+              },
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                  {
+                    type: 'text',
+                    text: `💰 ${forexPair} (M5)`,
+                    weight: 'bold',
+                    size: 'xl',
+                    color: '#1DB446'
+                  },
+                  {
+                    type: 'separator',
+                    margin: 'md'
+                  },
+                  {
+                    type: 'box',
+                    layout: 'vertical',
+                    margin: 'md',
+                    contents: [
+                      {
+                        type: 'box',
+                        layout: 'baseline',
+                        contents: [
+                          {
+                            type: 'text',
+                            text: '💡 สัญญาณ:',
+                            size: 'sm',
+                            color: '#666666',
+                            flex: 2
+                          },
+                          {
+                            type: 'text',
+                            text: `${analysisResult.signal} ⭐ (${analysisResult.confidence})`,
+                            weight: 'bold',
+                            size: 'sm',
+                            color: analysisResult.signal === 'CALL' ? '#1DB446' : '#FF5551',
+                            flex: 3,
+                            wrap: true
+                          }
+                        ]
+                      },
+                      {
+                        type: 'box',
+                        layout: 'baseline',
+                        margin: 'sm',
+                        contents: [
+                          {
+                            type: 'text',
+                            text: '🔍 โอกาสชนะ:',
+                            size: 'sm',
+                            color: '#666666',
+                            flex: 2
+                          },
+                          {
+                            type: 'text',
+                            text: `${analysisResult.winChance}%`,
+                            weight: 'bold',
+                            size: 'sm',
+                            color: '#1DB446',
+                            flex: 3
+                          }
+                        ]
+                      },
+                      {
+                        type: 'box',
+                        layout: 'baseline',
+                        margin: 'sm',
+                        contents: [
+                          {
+                            type: 'text',
+                            text: '⏰ เข้าเทรดตอน:',
+                            size: 'sm',
+                            color: '#666666',
+                            flex: 2
+                          },
+                          {
+                            type: 'text',
+                            text: targetTime,
+                            weight: 'bold',
+                            size: 'sm',
+                            color: '#1DB446',
+                            flex: 3
+                          }
+                        ]
+                      },
+                      {
+                        type: 'box',
+                        layout: 'baseline',
+                        margin: 'sm',
+                        contents: [
+                          {
+                            type: 'text',
+                            text: '💎 เครดิตคงเหลือ:',
+                            size: 'sm',
+                            color: '#666666',
+                            flex: 2
+                          },
+                          {
+                            type: 'text',
+                            text: `${remainingCredits} เครดิต`,
+                            weight: 'bold',
+                            size: 'sm',
+                            color: remainingCredits <= 3 ? '#FF5551' : '#1DB446',
+                            flex: 3
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              footer: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'sm',
+                contents: [
+                  {
+                    type: 'button',
+                    style: 'primary',
+                    height: 'sm',
+                    action: {
+                      type: 'postback',
+                      label: '🚀 วิเคราะห์อีกครั้ง',
+                      data: 'action=continue_trading'
+                    },
+                    color: '#1DB446'
+                  },
+                  {
+                    type: 'button',
+                    style: 'secondary',
+                    height: 'sm',
+                    action: {
+                      type: 'postback',
+                      label: '🛑 หยุดเทรด',
+                      data: 'action=stop_trading'
+                    }
+                  }
+                ]
+              }
             }
-          ]);
+          };
+          
+          // ส่งผลลัพธ์เป็น Flex Message เดียว (ใช้ pushMessage เพราะ replyToken ใช้ไปแล้ว)
+          await lineService.pushMessage(userId, forexResultMessage);
 
           // เริ่มระบบติดตามผล
           await resultTrackingService.startTracking(userId, analysisResult.signal, forexPair, targetTime);
