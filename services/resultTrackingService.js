@@ -258,12 +258,6 @@ class ResultTrackingService {
 
       console.log(`🔍 Checking result for user ${userId}, round ${session.round}`);
 
-      // ส่งข้อความแจ้งว่ากำลังเช็คผล
-      await lineService.pushMessage(userId, {
-        type: 'text',
-        text: `🔍 กำลังเช็คผลรอบที่ ${session.round}...\n⏳ กรุณารอสักครู่`
-      });
-
       // 🎯 คำนวณ entryTime ที่ถูกต้องสำหรับแต่ละรอบ
       let effectiveEntryTime;
       
