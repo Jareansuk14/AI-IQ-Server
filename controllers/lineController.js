@@ -448,7 +448,7 @@ const handlePostbackEvent = async (event) => {
           const imageUrl = `${baseURL}/images/${imageFileName}`;
           
           // ส่งผลลัพธ์ (ใช้ pushMessage เพราะ replyToken ใช้ไปแล้ว)
-          await lineService.replyMessage(replyToken, [
+          await lineService.pushMessage(userId, [
             // ส่งรูปภาพก่อน
             {
               type: 'image',
