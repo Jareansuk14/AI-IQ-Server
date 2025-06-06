@@ -35,16 +35,10 @@ class LineService {
   // ฟังก์ชันสำหรับส่งข้อความแจ้งเตือน (push)
   async pushMessage(userId, messages) {
     try {
-      // เพิ่ม delay 1 วินาที
-      await new Promise(resolve => setTimeout(resolve, 1000));
       return this.client.pushMessage(userId, messages);
     } catch (error) {
-      if (error.statusCode === 429) {
-        console.log('Rate limited, retrying in 5 seconds...');
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        return this.client.pushMessage(userId, messages);
-      }
-      throw error;
+      console.error('Error pushing message:', error);
+      return null;
     }
   }
 }

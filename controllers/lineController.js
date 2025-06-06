@@ -395,12 +395,6 @@ const handlePostbackEvent = async (event) => {
         try {
           console.log(`🔍 Processing technical analysis for pair: ${forexPair}`);
           
-          // ส่งข้อความ "กำลังประมวลผล..." ทันที
-          await lineService.replyMessage(event.replyToken, {
-            type: 'text',
-            text: `🔄 กำลังวิเคราะห์ ${forexPair}...\n\n📊 ระบบกำลังวิเคราะห์ข้อมูลทางเทคนิค\n⏳ กรุณารอสักครู่`
-          });
-          
           // ตรวจสอบเครดิต
           const profile = await lineService.getUserProfile(userId);
           const { user } = await saveOrUpdateUser(userId, profile);
