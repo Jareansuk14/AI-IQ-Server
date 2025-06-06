@@ -388,92 +388,93 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // การวิเคราะห์ Forex ด้วย Technical Analysis
-// แทนที่ส่วนนี้ใน handlePostbackEvent ของ lineController.js
+      // การวิเคราะห์ Forex ด้วย Technical Analysis - แก้ไขแล้ว
+      case 'forex_analysis':
+        const forexPair = params.get('pair');
+        
+        try {
+          console.log(`🔍 Processing technical analysis for pair: ${forexPair}`);
+          
+          // ✅ ไม่ส่งข้อความ loading ก่อน เพื่อเก็บ replyToken ไว้
+          
+          // ตรวจสอบเครดิต
+          const profile = await lineService.getUserProfile(userId);
+          const { user } = await saveOrUpdateUser(userId, profile);
+          
+          if (user.credits <= 0) {
+            return lineService.replyMessage(event.replyToken, {
+              type: 'text',
+              text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
+            });
+          }
 
-case 'forex_analysis':
-  const forexPair = params.get('pair');
-  
-  try {
-    console.log(`🔍 Processing technical analysis for pair: ${forexPair}`);
-    
-    // ✅ ไม่ส่งข้อความ loading ก่อน เพื่อเก็บ replyToken ไว้
-    
-    // ตรวจสอบเครดิต
-    const profile = await lineService.getUserProfile(userId);
-    const { user } = await saveOrUpdateUser(userId, profile);
-    
-    if (user.credits <= 0) {
-      return lineService.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '⚠️ เครดิตของคุณหมดแล้ว\n\n💎 เติมเครดิตโดยกดปุ่ม "เติมเครดิต" ด้านล่าง\n🎁 หรือแนะนำเพื่อนเพื่อรับเครดิตฟรี\n\n✨ แนะนำเพื่อน 1 คน = 10 เครดิตฟรี!'
-      });
-    }
+          // ✅ ทำ Technical Analysis (ไม่ส่งข้อความรอ)
+          console.log('🔍 Starting technical analysis...');
+          
+          const analysisResult = await aiService.processForexQuestion(`วิเคราะห์คู่เงิน ${forexPair}`);
+          
+          console.log('📊 Technical analysis result:', {
+            signal: analysisResult.signal,
+            confidence: analysisResult.confidence,
+            winChance: analysisResult.winChance
+          });
+          
+          // คำนวณเวลา 5 นาทีข้างหน้า
+          const targetTime = calculateNextTimeSlot();
+          
+          // หักเครดิต
+          await creditService.updateCredit(userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
+          
+          // ตรวจสอบเครดิตคงเหลือ
+          const remainingCredits = await creditService.checkCredit(userId);
+          
+          // สร้างข้อความแบบใหม่ด้วย Technical Analysis
+          const responseText = aiService.formatForexResponse(
+            analysisResult,
+            forexPair,
+            targetTime,
+            remainingCredits
+          );
+          
+          // เพิ่มข้อความติดตามผลไปด้วย (เพื่อไม่ต้องใช้ pushMessage)
+          const fullResponseText = responseText + `\n\n⏰ เตรียมเข้าเทรดตอน: ${targetTime}\n⏳ ระบบจะเช็คผลหลังจากจบแท่งเทียน\n🎯 รอบที่: 1/7`;
+          
+          console.log('📤 Sending technical analysis response');
+          
+          // URL ของรูปภาพตามการทำนาย
+          const baseURL = process.env.BASE_URL || 'http://localhost:3000';
+          const imageFileName = analysisResult.signal === 'CALL' ? 'call-signal.jpg' : 'put-signal.jpg';
+          const imageUrl = `${baseURL}/images/${imageFileName}`;
+          
+          // ✅ ส่งผลลัพธ์ครั้งเดียวด้วย replyMessage (ไม่นับโควต้า)
+          await lineService.replyMessage(event.replyToken, [
+            // ส่งรูปภาพก่อน
+            {
+              type: 'image',
+              originalContentUrl: imageUrl,
+              previewImageUrl: imageUrl
+            },
+            // ตามด้วยข้อความรวมติดตามผล
+            {
+              type: 'text',
+              text: fullResponseText
+            }
+          ]);
 
-    // ✅ ทำ Technical Analysis (ไม่ส่งข้อความรอ)
-    console.log('🔍 Starting technical analysis...');
-    
-    const analysisResult = await aiService.processForexQuestion(`วิเคราะห์คู่เงิน ${forexPair}`);
-    
-    console.log('📊 Technical analysis result:', {
-      signal: analysisResult.signal,
-      confidence: analysisResult.confidence,
-      winChance: analysisResult.winChance
-    });
-    
-    // คำนวณเวลา 5 นาทีข้างหน้า
-    const targetTime = calculateNextTimeSlot();
-    
-    // หักเครดิต
-    await creditService.updateCredit(userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
-    
-    // ตรวจสอบเครดิตคงเหลือ
-    const remainingCredits = await creditService.checkCredit(userId);
-    
-    // สร้างข้อความแบบใหม่ด้วย Technical Analysis
-    const responseText = aiService.formatForexResponse(
-      analysisResult,
-      forexPair,
-      targetTime,
-      remainingCredits
-    );
-    
-    console.log('📤 Sending technical analysis response');
-    
-    // URL ของรูปภาพตามการทำนาย
-    const baseURL = process.env.BASE_URL || 'http://localhost:3000';
-    const imageFileName = analysisResult.signal === 'CALL' ? 'call-signal.jpg' : 'put-signal.jpg';
-    const imageUrl = `${baseURL}/images/${imageFileName}`;
-    
-    // ✅ ส่งผลลัพธ์ครั้งเดียวด้วย replyMessage (ไม่นับโควต้า)
-    await lineService.replyMessage(event.replyToken, [
-      // ส่งรูปภาพก่อน
-      {
-        type: 'image',
-        originalContentUrl: imageUrl,
-        previewImageUrl: imageUrl
-      },
-      // ตามด้วยข้อความ
-      {
-        type: 'text',
-        text: responseText
-      }
-    ]);
-
-    // เริ่มระบบติดตามผล
-    await resultTrackingService.startTracking(userId, analysisResult.signal, forexPair, targetTime);
-    
-    return;
-    
-  } catch (error) {
-    console.error('❌ Error in technical analysis:', error);
-    
-    // ✅ ใช้ replyMessage สำหรับ error ด้วย (ไม่นับโควต้า)
-    return lineService.replyMessage(event.replyToken, {
-      type: 'text',
-      text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์ทางเทคนิค\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
-    });
-  }
+          // เริ่มระบบติดตามผล (แบบไม่ส่งข้อความเพิ่ม)
+          await resultTrackingService.startTrackingSilent(userId, analysisResult.signal, forexPair, targetTime);
+          
+          return;
+          
+        } catch (error) {
+          console.error('❌ Error in technical analysis:', error);
+          
+          // ✅ ใช้ replyMessage สำหรับ error ด้วย (ไม่นับโควต้า)
+          return lineService.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์ทางเทคนิค\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
+          });
+        }
 
       case 'continue_trading':
         try {
