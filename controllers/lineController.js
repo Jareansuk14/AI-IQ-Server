@@ -406,7 +406,7 @@ const handlePostbackEvent = async (event) => {
             
             return lineService.replyMessage(event.replyToken, {
               type: 'text',
-              text: `🕐 ตลาด ${forexPair} ปิดในวันหยุด\n\n💡 แนะนำเทรด BTC/USD แทน\n🎯 Cryptocurrency เปิดเทรด 24/7`
+              text: `❌ ตลาด ${forexPair} ปิดในวันหยุด\n\n💡 แนะนำเทรด BTC/USD แทน\n🎯 Cryptocurrency เปิดเทรด 24/7 \n📊หรือส่งรูปกราฟจากตลาด OTC  มาให้ผมช่วยวิเคราะห์ได้เลยนะครับ`
             });
           }
 
