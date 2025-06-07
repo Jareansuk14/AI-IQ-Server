@@ -1,4 +1,4 @@
-// AI-Server/controllers/lineController.js - โค้ดทั้งหมดพร้อม Referral Cards และ Credit/Support Cards
+// AI-Server/controllers/lineController.js - เปลี่ยนเฉพาะส่วน forex_analysis + Market Hours Check
 
 const lineService = require('../services/lineService');
 const aiService = require('../services/aiService');
@@ -6,6 +6,7 @@ const creditService = require('../services/creditService');
 const paymentService = require('../services/paymentService');
 const qrCodeService = require('../services/qrCodeService');
 const resultTrackingService = require('../services/resultTrackingService');
+const iqOptionService = require('../services/iqOptionService'); // เพิ่มการ import
 const {
   createCreditPackagesMessage,
   createPaymentInfoMessage,
@@ -304,7 +305,7 @@ const handleSpecialCommand = async (event) => {
   }
 };
 
-// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Support และ Credit Menu
+// ฟังก์ชันจัดการ Postback Events - อัปเดตพร้อม Support และ Credit Menu + Market Hours Check
 const handlePostbackEvent = async (event) => {
   try {
     const data = event.postback.data;
@@ -388,14 +389,29 @@ const handlePostbackEvent = async (event) => {
           });
         }
 
-      // การวิเคราะห์ Forex ด้วย Technical Analysis
+      // 🆕 การวิเคราะห์ Forex ด้วย Market Hours Check
       case 'forex_analysis':
         const forexPair = params.get('pair');
 
         try {
-          console.log(`🔍 Processing technical analysis for pair: ${forexPair}`);
+          console.log(`🔍 Processing forex analysis for pair: ${forexPair}`);
 
-          // ✅ ไม่ส่งข้อความ loading ก่อน เพื่อเก็บ replyToken ไว้
+          // 🆕 ตรวจสอบสถานะตลาดก่อน
+          const marketStatus = iqOptionService.isMarketOpen(forexPair);
+          console.log(`🕐 Market status for ${forexPair}:`, marketStatus);
+
+          // ถ้าตลาดปิด (ยกเว้น BTC)
+          if (!marketStatus.isOpen) {
+            console.log(`❌ Market closed for ${forexPair} on weekend`);
+            
+            return lineService.replyMessage(event.replyToken, {
+              type: 'text',
+              text: `🕐 ตลาด ${forexPair} ปิดในวันหยุด\n\n💡 แนะนำเทรด BTC/USD แทน\n🎯 Cryptocurrency เปิดเทรด 24/7\n\n❌ ไม่มีการตัดเครดิต\n\n💰 พิมพ์ "AI-Auto" เพื่อเลือกคู่เงินใหม่`
+            });
+          }
+
+          // ถ้าตลาดเปิด ดำเนินการปกติ
+          console.log(`✅ Market open for ${forexPair}, proceeding with analysis`);
 
           // ตรวจสอบเครดิต
           const profile = await lineService.getUserProfile(userId);
@@ -408,7 +424,7 @@ const handlePostbackEvent = async (event) => {
             });
           }
 
-          // ✅ ทำ Technical Analysis (ไม่ส่งข้อความรอ)
+          // ทำ Technical Analysis
           console.log('🔍 Starting technical analysis...');
 
           const analysisResult = await aiService.processForexQuestion(`วิเคราะห์คู่เงิน ${forexPair}`);
@@ -422,7 +438,7 @@ const handlePostbackEvent = async (event) => {
           // คำนวณเวลา 5 นาทีข้างหน้า
           const targetTime = calculateNextTimeSlot();
 
-          // หักเครดิต
+          // หักเครดิต (เพราะตลาดเปิด)
           await creditService.updateCredit(userId, -1, 'use', `ใช้เครดิตในการวิเคราะห์ ${forexPair}`);
 
           // ตรวจสอบเครดิตคงเหลือ
@@ -443,7 +459,7 @@ const handlePostbackEvent = async (event) => {
           const imageFileName = analysisResult.signal === 'CALL' ? 'call-signal.jpg' : 'put-signal.jpg';
           const imageUrl = `${baseURL}/images/${imageFileName}`;
 
-          // ✅ ส่งผลลัพธ์ครั้งเดียวด้วย replyMessage (ไม่นับโควต้า)
+          // ส่งผลลัพธ์ครั้งเดียวด้วย replyMessage
           await lineService.replyMessage(event.replyToken, [
             // ส่งรูปภาพก่อน
             {
@@ -464,12 +480,11 @@ const handlePostbackEvent = async (event) => {
           return;
 
         } catch (error) {
-          console.error('❌ Error in technical analysis:', error);
+          console.error('❌ Error in forex analysis:', error);
 
-          // ✅ ใช้ replyMessage สำหรับ error ด้วย (ไม่นับโควต้า)
           return lineService.replyMessage(event.replyToken, {
             type: 'text',
-            text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์ทางเทคนิค\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
+            text: '❌ ขออภัย เกิดข้อผิดพลาดในการวิเคราะห์\n\n💡 กรุณาลองใหม่อีกครั้งหรือติดต่อผู้ดูแลระบบ'
           });
         }
 

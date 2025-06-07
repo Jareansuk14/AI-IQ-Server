@@ -1,4 +1,4 @@
-// AI-Server/services/iqOptionService.js - Complete Version (ไม่ต้องแก้ไข)
+// AI-Server/services/iqOptionService.js - Complete Version + Market Hours Check
 const axios = require('axios');
 require('dotenv').config();
 
@@ -14,6 +14,53 @@ class IQOptionService {
   // 🇹🇭 Helper: สร้าง Date object ใน Asia/Bangkok timezone
   getBangkokTime() {
     return new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Bangkok"}));
+  }
+
+  // 🆕 ตรวจสอบว่าตลาดเปิดหรือไม่ (สำหรับ Weekend Rule)
+  isMarketOpen(pair) {
+    try {
+      const bangkokNow = this.getBangkokTime();
+      const day = bangkokNow.getDay(); // 0 = Sunday, 6 = Saturday
+      
+      console.log(`🕐 Checking market hours for ${pair} on day ${day} (Bangkok time)`);
+      
+      // Crypto เปิดตลอด 24/7
+      if (pair === 'BTC/USD' || pair === 'ETH/USD' || pair === 'LTC/USD' || pair === 'ADA/USD') {
+        console.log(`✅ ${pair} - Crypto market is always open`);
+        return {
+          isOpen: true,
+          type: 'crypto',
+          message: 'Cryptocurrency market is open 24/7'
+        };
+      }
+      
+      // Forex และ GOLD ปิดสุดสัปดาห์
+      if (day === 0 || day === 6) { // วันอาทิตย์ หรือ วันเสาร์
+        console.log(`❌ ${pair} - Forex/Gold market is closed on weekends`);
+        return {
+          isOpen: false,
+          type: pair === 'GOLD' ? 'commodity' : 'forex',
+          message: `${pair === 'GOLD' ? 'Gold' : 'Forex'} market is closed on weekends`
+        };
+      }
+      
+      // วันจันทร์-ศุกร์ ตลาด Forex/Gold เปิด
+      console.log(`✅ ${pair} - Market is open on weekdays`);
+      return {
+        isOpen: true,
+        type: pair === 'GOLD' ? 'commodity' : 'forex',
+        message: `${pair === 'GOLD' ? 'Gold' : 'Forex'} market is open`
+      };
+      
+    } catch (error) {
+      console.error('❌ Error checking market hours:', error);
+      // ถ้าเกิด error ให้ถือว่าตลาดเปิด (safe fallback)
+      return {
+        isOpen: true,
+        type: 'unknown',
+        message: 'Unable to determine market hours, assuming open'
+      };
+    }
   }
 
   // 🎯 ฟังก์ชันหลักใหม่: ดูแท่งเทียนปัจจุบัน (แก้ไขให้เลือกแท่งถูกต้อง)
@@ -433,25 +480,12 @@ class IQOptionService {
     return results;
   }
 
-  // 🕐 ตรวจสอบว่าตลาดเปิดหรือไม่ (ใช้ Bangkok timezone)
-  isMarketOpen() {
-    const bangkokNow = this.getBangkokTime();
-    const day = bangkokNow.getDay(); // 0 = Sunday, 6 = Saturday
-    const hour = bangkokNow.getHours();
-    
-    return {
-      forex: day !== 0 && day !== 6,  // Forex ปิดสุดสัปดาห์
-      crypto: true,                   // Crypto เปิดตลอด
-      tradingHours: hour >= 9 && hour <= 17, // Trading hours 9-17
-      timestamp: bangkokNow.toISOString(),
-      timezone: 'Asia/Bangkok'
-    };
-  }
-
-  // 📈 ดูสถิติการใช้งาน (อัปเดต)
+  // 📈 ดูสถิติการใช้งาน (อัปเดต + Market Hours)
   getUsageStats() {
     const remainingRequests = Math.max(0, this.dailyLimit - this.requestCount);
     const usagePercent = Math.round((this.requestCount / this.dailyLimit) * 100);
+    const bangkokNow = this.getBangkokTime();
+    const day = bangkokNow.getDay();
 
     return {
       method: 'Twelve Data API (Simplified)',
@@ -464,7 +498,14 @@ class IQOptionService {
       dailyLimit: this.dailyLimit,
       remainingRequests: remainingRequests,
       usagePercent: `${usagePercent}%`,
-      marketStatus: this.isMarketOpen(),
+      marketStatus: {
+        forex: !(day === 0 || day === 6),  // Forex ปิดสุดสัปดาห์
+        crypto: true,                      // Crypto เปิดตลอด
+        tradingHours: bangkokNow.getHours() >= 9 && bangkokNow.getHours() <= 17, // Trading hours 9-17
+        currentDay: ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'][day],
+        timestamp: bangkokNow.toISOString(),
+        timezone: 'Asia/Bangkok'
+      },
       supportedPairs: [
         // Forex
         'EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF',
@@ -476,6 +517,7 @@ class IQOptionService {
         'XAU/USD (GOLD)'
       ],
       features: [
+        '✅ Weekend Market Check',
         '✅ Simplified Logic',
         '✅ Current Candle Only',
         '✅ No Time Calculation',
@@ -490,7 +532,8 @@ class IQOptionService {
         'ดูแท่งเทียนปัจจุบันเท่านั้น',
         'ลด complexity ลงอย่างมาก',
         'ง่ายต่อการ debug',
-        'ใช้ API calls น้อยลง'
+        'ใช้ API calls น้อยลง',
+        'รองรับ Weekend Trading Rule'
       ],
       pricing: {
         free: '800 requests/day',
@@ -551,14 +594,18 @@ class IQOptionService {
     }
   }
 
-  // 🔧 Helper method สำหรับ debug (อัปเดต - รองรับ entryTime)
+  // 🔧 Helper method สำหรับ debug (อัปเดต - รองรับ entryTime + Market Hours)
   async debugCurrentCandle(pair, entryTime = null) {
     try {
-      console.log(`🔧 Debug mode - getCurrentCandle() with smart candle selection`);
+      console.log(`🔧 Debug mode - getCurrentCandle() with market hours check`);
       console.log(`📊 Pair: ${pair}`);
       console.log(`⏰ Entry Time: ${entryTime || 'Not specified'}`);
       console.log(`🔑 API Key: ${this.apiKey ? 'Configured' : 'Not configured'}`);
       console.log(`📈 Request Count: ${this.requestCount}/${this.dailyLimit}`);
+
+      // ตรวจสอบตลาดก่อน
+      const marketStatus = this.isMarketOpen(pair);
+      console.log(`🕐 Market Status:`, marketStatus);
 
       const twelveSymbol = this.convertToTwelveDataSymbol(pair);
       console.log(`🌐 Twelve Data Symbol: ${twelveSymbol}`);
@@ -567,7 +614,10 @@ class IQOptionService {
       
       console.log(`📊 Final Result:`, JSON.stringify(result, null, 2));
       
-      return result;
+      return {
+        marketStatus,
+        result
+      };
     } catch (error) {
       console.error('Debug error:', error);
       return { error: error.message };
